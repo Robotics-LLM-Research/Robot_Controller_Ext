@@ -11,18 +11,17 @@ def start_api(cmd_q: "queue.Queue", host, port):
     @app.get("/ping")
     def ping():
         return {"ok": True}
-
-    @app.post("/joint_delta")
-    def joint_delta(joint: int = 0, delta: float = 0.2):
-        """Queue intent. Isaac executes"""
-        cmd_q.put(("joint_delta", int(joint), float(delta)))
-        return {"queued": True}
-    
+  
     @app.post("/move")
     def move(meters: float = 1.0):
         cmd_q.put(("move", float(meters)))
         return {"queued": True}
     
+    @app.post("/cmd_vel")
+    def cmd_vel(vx: float = 0.0, vy: float = 0.0, wz: float = 0.0):
+        # vx, vy linear in m/s, wz angular in rad/s
+        cmd_q.put(("cmd_vel", float(vx), float(vy), float(wz)))
+        return {"queued": True}
 
     # ----- Server -----
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
