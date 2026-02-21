@@ -3,6 +3,7 @@ import carb
 import omni.ext
 import omni.physx
 import omni.timeline
+import omni.kit.app
 
 from omni.isaac.core import World
 from omni.isaac.core.articulations import Articulation
@@ -22,6 +23,9 @@ class Extension(omni.ext.IExt):
     def on_startup(self, ext_id: str):
         log("startup")
         self._inited = False
+
+        self._move_remaining = 0.0  # meters lef to move
+        self._move_speed = 0.5      # m/s
         
         # Start API server
         self.cmd_q = queue.Queue()
@@ -71,6 +75,8 @@ class Extension(omni.ext.IExt):
         self._physx_sub = self._physx.subscribe_physics_step_events(self._on_physics_step)
         log("Physiscs step suscribed")
 
+
+    # ----- Main loop -----
     def _on_physics_step(self, step):
         if not hasattr(self, "_tick_logged"):
             log("physics ticks running")
@@ -92,10 +98,22 @@ class Extension(omni.ext.IExt):
                 q[joint] += delta
                 self.spot.apply_action(ArticulationAction(joint_positions=q))
                 log(f"Applied joint delta: joint={joint}, delta={delta}")
+            elif cmd[0] == "move":
+                meters = cmd[1]
+                self._move_remaining += meters
+                log(f"Applied move: {meters}m (remaining={self._move_remaining}m)")
 
-    async def _init_robot(self):
-        if getattr(self, "_inited", False):
-            return
-        await omni.kit.app.get_app().next_update_async()
-        self.world.reset()
-        self.spot.initialize()
+        # Apply ongoing move (simple slide)
+        if abs(self._move_remaining) > 1e-4:
+            dt = float(step) if step else 1.0 / 60.0
+
+            dx = self._move_speed * dt
+            if abs(dx) > abs(self._move_remaining):
+                dx = abs(self._move_remaining)
+            dx *= 1.0 if self._move_remaining > 0 else -1.0
+
+            pos, quat = self.spot.get_world_pose()
+            pos = (pos[0] + dx, pos[1], pos[2])
+            self.spot.set_world_pose(pos, quat)
+
+            self._move_remaining -= dx

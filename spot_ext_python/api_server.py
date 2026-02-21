@@ -7,6 +7,7 @@ import uvicorn
 def start_api(cmd_q: "queue.Queue", host, port):
     app = FastAPI()
 
+    # ----- Endpoints -----
     @app.get("/ping")
     def ping():
         return {"ok": True}
@@ -17,6 +18,13 @@ def start_api(cmd_q: "queue.Queue", host, port):
         cmd_q.put(("joint_delta", int(joint), float(delta)))
         return {"queued": True}
     
+    @app.post("/move")
+    def move(meters: float = 1.0):
+        cmd_q.put(("move", float(meters)))
+        return {"queued": True}
+    
+
+    # ----- Server -----
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
     
