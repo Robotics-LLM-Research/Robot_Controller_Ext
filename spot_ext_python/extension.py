@@ -20,9 +20,13 @@ HOST = "127.0.0.1"
 PORT = 8001
 
 SPOT_PATH = "/World/Spot"
+LIDAR_ORIGIN = SPOT_PATH + "/body"
 
 def log(msg):
     carb.log_warn(f"[spot-ext] {msg}")
+
+def _wrap_pi(a: float) -> float:
+    return math.atan2(math.sin(a), math.cos(a))
 
 def _get_world_pose_xy_yaw(prim_path: str):
     stage = omni.usd.get_context().get_stage()
@@ -59,8 +63,7 @@ class Extension(omni.ext.IExt):
 
     def on_startup(self, ext_id: str):
         log("startup")
-
-        self._dbg_i = 0
+        self._dbg_i = 0 # DEBUG
 
         # --- Runtime state ---
         self._inited = False
@@ -85,8 +88,15 @@ class Extension(omni.ext.IExt):
         self._move_speed = 2            # m/s
 
         self._rot_active = False
-        self._rot_remaining_rad = 0.0
-        self._rot_speed = 1.0           # rad/s
+        self._rot_target_yaw = None
+        self._rot_kp = 2.0
+        self._rot_max_wz = 1.0          # rad/s
+        self._rot_tol = math.radians(2) # stop within 2 degrees
+
+        self._hold_heading = True
+        self._hold_yaw = None
+        self._hold_kp = 1.0
+        self._hold_max_wz = 0.2
 
         # Lidar
         self._lidar_rel_yaw = 0.0       # radians, 0 = forward
@@ -97,7 +107,6 @@ class Extension(omni.ext.IExt):
         # --- API Server ---
         self.cmd_q = queue.Queue()
         def _get_lidar():
-            # Return cached values ONLY (thread-safe enough for floats/refs)
             return float(self._lidar_last_dist), (str(self._lidar_last_hit) if self._lidar_last_hit else None)
         
         self._server, self._api_thread = start_api(self.cmd_q, HOST, PORT, get_lidar=_get_lidar)
@@ -131,13 +140,13 @@ class Extension(omni.ext.IExt):
         self.world = None
         self._inited = False
 
-    # Timeline event, init on Play
+    # Timeline event
     def _on_timeline_event(self, event):
         # if timeline is not playing, next Play should re-init policy
         if not self._timeline.is_playing():
             self._reset_needed = True
 
-        # first-ever Play: do your init
+        # first-ever Play: do init
         if (not self._inited) and self._timeline.is_playing():
             self._inited = True
             import asyncio
@@ -145,7 +154,7 @@ class Extension(omni.ext.IExt):
 
     async def _init_after_play(self):
         # Wait for PhysX
-        for _ in range(120):  # ~2 seconds at 60fps
+        for _ in range(120):  # ~2 seconds
             if physx.get_physx_interface() is not None:
                 break
             await omni.kit.app.get_app().next_update_async()
@@ -160,12 +169,7 @@ class Extension(omni.ext.IExt):
             position=np.array([0.0, 0.0, 0.8])
         )
         log("Spot spawned")
-
-        stage = omni.usd.get_context().get_stage()
-        prim = stage.GetPrimAtPath(SPOT_PATH)
-        for c in prim.GetChildren():
-            log(f"child: {c.GetPath()}")
-        
+     
         # Subscribe to physx step events
         self._physx_iface = physx.get_physx_interface()
         try:
@@ -187,17 +191,16 @@ class Extension(omni.ext.IExt):
         if self._reset_needed:
             self._reset_needed = False
 
-            # clear motion so it doesn't "start moving weirdly"
+            # clear motion
             self._base_cmd[:] = [0.0, 0.0, 0.0]
             self._move_active = False
             self._rot_active = False
             self._move_remaining = 0.0
             self._rot_remaining_rad = 0.0
 
-            # soft reset world like the standalone example uses on stop
+            # soft reset
             try:
                 self.world.reset(True)
-                log("world soft reset on replay")
             except Exception as e:
                 log(f"world.reset(True) failed on replay: {e}")
 
@@ -232,24 +235,26 @@ class Extension(omni.ext.IExt):
         except Exception as e:
             log(f"spot.forward failed: {e}")
 
-        # Update single-ray lidar
-        
+        ################################################################################ DEBUG RAYCAST LIDAR
         self._dbg_i += 1
         if self._dbg_i % 30 == 0:
             x, y, z, yaw = _get_world_pose_xy_yaw(SPOT_PATH)
             log(f"ray pose from {SPOT_PATH}: x={x:.2f} y={y:.2f} yaw={yaw:.2f}  lidar={self._lidar_last_dist:.2f}")
+            #############################################################################
+
+        ############################################################################# DEBUG ROTATION OFFSET
+        if self._dbg_i % 60 == 0:
+            x, y, z, yaw = _get_world_pose_xy_yaw("/World/Spot/body")
+            log(f"yaw={yaw:.3f}  cmd_wz={self._base_cmd[2]:.4f}")
+            #############################################################################
+
+        # Update single-ray lidar
         try:
-            LIDAR_ORIGIN = "/World/Spot/body"
             d, hit = raycast_distance_from_yaw(LIDAR_ORIGIN, self._lidar_rel_yaw, max_dist=self._lidar_max_dist)
             self._lidar_last_dist = d
             self._lidar_last_hit = hit
         except Exception as e:
-            log(f"lidar raycast failed: {e}")
-
-        # near your existing debug block
-        if self._dbg_i % 60 == 0:
-            x, y, z, yaw = _get_world_pose_xy_yaw("/World/Spot/body")
-            log(f"yaw={yaw:.3f}  cmd_wz={self._base_cmd[2]:.4f}")
+            log(f"lidar raycast failed: {e}")     
 
     # ----- Command processing -----
     def _process_cmd_queue(self):
@@ -279,15 +284,22 @@ class Extension(omni.ext.IExt):
 
             elif kind == "rotate":
                 deg = float(cmd[1])
-                rad = math.radians(deg)
-                self._rot_remaining_rad += rad
-                self._rot_active = True
-                log(f"rotate queued: {deg} deg (remaining={self._rot_remaining_rad:.3f} rad)")
+                delta = math.radians(deg)
+                _, _, _, cur_yaw = _get_world_pose_xy_yaw("/World/Spot/body")
+
+                if self._rot_active and self._rot_target_yaw is not None:
+                    self._rot_target_yaw = _wrap_pi(self._rot_target_yaw + delta)
+                else:
+                    self._rot_target_yaw = _wrap_pi(cur_yaw + delta)
+                    self._rot_active = True
+
+                log(f"rotate target set: {deg} deg -> target_yaw={self._rot_target_yaw:.3f}")
 
             elif kind == "stop":
                 self._base_cmd[:] = [0.0, 0.0, 0.0]
                 self._move_active = False
                 self._rot_active = False
+                self._rot_target_yaw = None
                 self._move_remaining = 0.0
                 self._rot_remaining_rad = 0.0
                 log("stop: cleared base cmd + goals")
@@ -319,14 +331,27 @@ class Extension(omni.ext.IExt):
                 self._move_active = False
 
         # Rotate goal
-        if self._rot_active:
-            if abs(self._rot_remaining_rad) > 1e-4:
-                direction = 1.0 if self._rot_remaining_rad > 0 else -1.0
-                wz = self._rot_speed * direction
-                self._rot_remaining_rad -= wz * dt
-            else:
-                self._rot_remaining_rad = 0.0
+        if self._rot_active and self._rot_target_yaw is not None:
+            _, _, _, cur_yaw = _get_world_pose_xy_yaw("/World/Spot/body")
+            err = _wrap_pi(self._rot_target_yaw - cur_yaw)
+
+            if abs(err) < self._rot_tol:
                 self._rot_active = False
+                self._rot_target_yaw = None
+                wz = 0.0
+            else:
+                wz = max(-self._rot_max_wz, min(self._rot_max_wz, self._rot_kp * err))
+
+        # Hold heading when idle to cancel drift
+        if self._hold_heading and (not self._move_active) and (not self._rot_active):
+            _, _, _, cur_yaw = _get_world_pose_xy_yaw("/World/Spot/body")
+            if self._hold_yaw is None:
+                self._hold_yaw = cur_yaw
+            err = _wrap_pi(self._hold_yaw - cur_yaw)
+            wz_hold = max(-self._hold_max_wz, min(self._hold_max_wz, self._hold_kp * err))
+            self._base_cmd[:] = [0.0, 0.0, wz_hold]
+        else:
+            self._hold_yaw = None
 
         # Apply combined result
         self._base_cmd[:] = [vx, 0.0, wz]
