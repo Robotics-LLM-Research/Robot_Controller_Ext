@@ -5,7 +5,7 @@ from fastapi import FastAPI
 import uvicorn
 
 
-def start_api(cmd_q: "queue.Queue", host: str, port: int):
+def start_api(cmd_q: "queue.Queue", host: str, port: int, get_lidar=None):
     app = FastAPI()
 
     # ----- Endpoints -----
@@ -41,6 +41,18 @@ def start_api(cmd_q: "queue.Queue", host: str, port: int):
         """
         cmd_q.put(("stop",))
         return {"queued": True}
+    
+    @app.post("/lidar_config")
+    def lidar_config(yaw_deg: float = 0.0, max_dist: float = 10.0):
+        cmd_q.put(("lidar_cfg", float(yaw_deg), float(max_dist)))
+        return {"queued": True}
+
+    @app.get("/lidar")
+    def lidar():
+        if get_lidar is None:
+            return {"ok": False, "error": "lidar not wired"}
+        dist, hit = get_lidar()
+        return {"ok": True, "distance_m": dist, "hit": hit}
 
     # ----- Server -----
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")

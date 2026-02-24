@@ -9,11 +9,13 @@ import omni.timeline
 import omni.physx as physx
 import omni.kit.app
 
+from pxr import UsdGeom
 from isaacsim.core.api import World
 from isaacsim.robot.policy.examples.robots import SpotFlatTerrainPolicy
-from pxr import UsdGeom, UsdPhysics, PhysxSchema
+from omni.physx import get_physx_scene_query_interface
 
 from .api_server import start_api
+
 HOST = "127.0.0.1"
 PORT = 8001
 
@@ -22,10 +24,43 @@ SPOT_PATH = "/World/Spot"
 def log(msg):
     carb.log_warn(f"[spot-ext] {msg}")
 
+def _get_world_pose_xy_yaw(prim_path: str):
+    stage = omni.usd.get_context().get_stage()
+    prim = stage.GetPrimAtPath(prim_path)
+    xform = UsdGeom.Xformable(prim)
+
+    cache = UsdGeom.XformCache()
+    m = cache.GetLocalToWorldTransform(prim)
+
+    # position
+    p = m.ExtractTranslation()
+    x, y, z = float(p[0]), float(p[1]), float(p[2])
+
+    # yaw from rotation
+    r = m.ExtractRotationMatrix()
+    yaw = math.atan2(float(r[1][0]), float(r[0][0]))
+    return x, y, z, yaw
+
+def raycast_distance_from_yaw(spot_root_path: str, rel_yaw_rad: float, max_dist: float = 10.0):
+    x, y, z, yaw = _get_world_pose_xy_yaw(spot_root_path)
+
+    origin = carb.Float3(x, y, z + 0.30)  # lift ray origin
+    a = yaw + rel_yaw_rad
+    direction = carb.Float3(math.cos(a), math.sin(a), 0.0)
+
+    sq = get_physx_scene_query_interface()
+    hit = sq.raycast_closest(origin, direction, max_dist, True)
+
+    if hit and ("distance" in hit):
+        return float(hit["distance"]), hit.get("rigid_body", None)
+    return max_dist, None
+
 class Extension(omni.ext.IExt):
 
     def on_startup(self, ext_id: str):
         log("startup")
+
+        self._dbg_i = 0
 
         # --- Runtime state ---
         self._inited = False
@@ -53,9 +88,19 @@ class Extension(omni.ext.IExt):
         self._rot_remaining_rad = 0.0
         self._rot_speed = 1.0           # rad/s
 
+        # Lidar
+        self._lidar_rel_yaw = 0.0       # radians, 0 = forward
+        self._lidar_max_dist = 10.0     # meters
+        self._lidar_last_dist = self._lidar_max_dist
+        self._lidar_last_hit = None
+
         # --- API Server ---
         self.cmd_q = queue.Queue()
-        self._server, self._api_thread = start_api(self.cmd_q, HOST, PORT)
+        def _get_lidar():
+            # Return cached values ONLY (thread-safe enough for floats/refs)
+            return float(self._lidar_last_dist), (str(self._lidar_last_hit) if self._lidar_last_hit else None)
+        
+        self._server, self._api_thread = start_api(self.cmd_q, HOST, PORT, get_lidar=_get_lidar)
         log(f"api on http://{HOST}:{PORT}")
 
         # --- Timeline event ---
@@ -115,6 +160,11 @@ class Extension(omni.ext.IExt):
             position=np.array([0.0, 0.0, 0.8])
         )
         log("Spot spawned")
+
+        stage = omni.usd.get_context().get_stage()
+        prim = stage.GetPrimAtPath(SPOT_PATH)
+        for c in prim.GetChildren():
+            log(f"child: {c.GetPath()}")
         
         # Subscribe to physx step events
         self._physx_iface = physx.get_physx_interface()
@@ -182,6 +232,25 @@ class Extension(omni.ext.IExt):
         except Exception as e:
             log(f"spot.forward failed: {e}")
 
+        # Update single-ray lidar
+        
+        self._dbg_i += 1
+        if self._dbg_i % 30 == 0:
+            x, y, z, yaw = _get_world_pose_xy_yaw(SPOT_PATH)
+            log(f"ray pose from {SPOT_PATH}: x={x:.2f} y={y:.2f} yaw={yaw:.2f}  lidar={self._lidar_last_dist:.2f}")
+        try:
+            LIDAR_ORIGIN = "/World/Spot/body"
+            d, hit = raycast_distance_from_yaw(LIDAR_ORIGIN, self._lidar_rel_yaw, max_dist=self._lidar_max_dist)
+            self._lidar_last_dist = d
+            self._lidar_last_hit = hit
+        except Exception as e:
+            log(f"lidar raycast failed: {e}")
+
+        # near your existing debug block
+        if self._dbg_i % 60 == 0:
+            x, y, z, yaw = _get_world_pose_xy_yaw("/World/Spot/body")
+            log(f"yaw={yaw:.3f}  cmd_wz={self._base_cmd[2]:.4f}")
+
     # ----- Command processing -----
     def _process_cmd_queue(self):
         while True:
@@ -222,6 +291,12 @@ class Extension(omni.ext.IExt):
                 self._move_remaining = 0.0
                 self._rot_remaining_rad = 0.0
                 log("stop: cleared base cmd + goals")
+
+            elif kind == "lidar_cfg":
+                _, yaw_deg, max_dist = cmd
+                self._lidar_rel_yaw = math.radians(float(yaw_deg))
+                self._lidar_max_dist = float(max_dist)
+                log(f"lidar_cfg: yaw_deg={yaw_deg}, max_dist={max_dist}")
 
             else:
                 log(f"unknown cmd: {cmd}")
