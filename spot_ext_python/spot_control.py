@@ -5,14 +5,14 @@ import numpy as np
 import carb
 import omni.usd
 from pxr import UsdGeom
+from omni.isaac.dynamic_control import _dynamic_control
 
+from .utils import log
 from .sensing import SensorSuite
 
 
-# ----- Utils -----
-def log(msg: str):
-    carb.log_warn(f"[spot-ext] {msg}")
 
+# ----- Utils -----
 def _wrap_pi(a: float) -> float:
     return math.atan2(math.sin(a), math.cos(a))
 
@@ -30,7 +30,6 @@ def _get_world_pose_xy_yaw(prim_path: str):
     r = m.ExtractRotationMatrix()
     yaw = math.atan2(float(r[1][0]), float(r[0][0]))
     return x, y, z, yaw
-
 
 
 class MotionController:
@@ -85,14 +84,14 @@ class MotionController:
             self._move_remaining = 0.0
             self._rot_target_yaw = None
             self._manual_cmd[:] = [float(vx), float(vy), float(wz)]
-            log(f"cmd_vel set: vx={vx}, vy={vy}, wz={wz}")
+            log(f"[SPOT] cmd_vel set: vx={vx}, vy={vy}, wz={wz}")
 
         elif kind == "move":
             meters = float(cmd[1])
             self._manual_cmd[:] = [0.0, 0.0, 0.0]
             self._move_remaining += meters
             self._move_active = True
-            log(f"move queued: {meters} m (remaining={self._move_remaining} m)")
+            log(f"[SPOT] move queued: {meters} m (remaining={self._move_remaining} m)")
 
         elif kind == "rotate":
             deg = float(cmd[1])
@@ -106,11 +105,11 @@ class MotionController:
                 self._rot_target_yaw = _wrap_pi(cur_yaw + delta)
                 self._rot_active = True
 
-            log(f"rotate target set: {deg} deg -> target_yaw={self._rot_target_yaw:.3f}")
+            log(f"[SPOT] rotate target set: {deg} deg -> target_yaw={self._rot_target_yaw:.3f}")
 
         elif kind == "stop":
             self.reset()
-            log("stop: cleared base cmd + goals")
+            log("[SPOT] stop: cleared base cmd + goals")
 
         else:
             return False
@@ -203,7 +202,6 @@ class SpotRuntime:
         self,
         cmd_q: "queue.Queue",
         spot_body_path: str,
-        lidar_origin_path: str,
         cam_path: str,
         imu_path: str,
         cam_res=(640, 480),
@@ -218,7 +216,6 @@ class SpotRuntime:
 
         self.motion = MotionController(spot_body_path=spot_body_path)
         self.sensing = SensorSuite(
-            lidar_origin_path=lidar_origin_path,
             cam_path=cam_path,
             imu_path=imu_path,
             cam_res=cam_res,
@@ -226,9 +223,6 @@ class SpotRuntime:
         )
 
     # ----- API hooks -----
-    def get_lidar(self):
-        return self.sensing.get_lidar()
-
     def get_sensors(self):
         return self.sensing.get_sensors()
 
@@ -266,7 +260,7 @@ class SpotRuntime:
                 self._policy_inited = True
                 self._warmup_left = 60
             except Exception as e:
-                log(f"spot.initialize not ready yet: {e}")
+                log(f"[SPOT] spot.initialize not ready yet: {e}")
             return
 
         # Update sensing
@@ -282,7 +276,7 @@ class SpotRuntime:
         try:
             self.spot.forward(float(dt), base_cmd)
         except Exception as e:
-            log(f"spot.forward failed: {e}")
+            log(f"[SPOT] spot.forward failed: {e}")
 
     def _drain_cmd_queue(self):
         while True:
@@ -291,15 +285,7 @@ class SpotRuntime:
             except queue.Empty:
                 break
 
-            kind = cmd[0]
-
-            # Route lidar config to sensing
-            if kind == "lidar_cfg":
-                _, yaw_deg, max_dist = cmd
-                self.sensing.set_lidar_config(yaw_deg, max_dist)
-                continue
-
             # Route locomotion commands to motion controller
             handled = self.motion.handle_cmd(cmd)
             if not handled:
-                log(f"unknown cmd: {cmd}")
+                log(f"[SPOT] unknown cmd: {cmd}")

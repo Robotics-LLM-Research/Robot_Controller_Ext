@@ -1,11 +1,12 @@
-import threading
 import queue
+import threading
 
 import uvicorn
 from fastapi import FastAPI
 
 
-def start_api(cmd_q: "queue.Queue", host: str, port: int, get_lidar=None, get_sensors=None):
+
+def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_sensors=None):
     app = FastAPI()
 
     # ---------- ENDPOINTS ----------
@@ -43,19 +44,7 @@ def start_api(cmd_q: "queue.Queue", host: str, port: int, get_lidar=None, get_se
         cmd_q.put(("stop",))
         return {"queued": True}
     
-    # --- Sensors ---
-    @app.post("/lidar_config")
-    def lidar_config(yaw_deg: float = 0.0, max_dist: float = 10.0):
-        cmd_q.put(("lidar_cfg", float(yaw_deg), float(max_dist)))
-        return {"queued": True}
-
-    @app.get("/lidar")
-    def lidar():
-        if get_lidar is None:
-            return {"ok": False, "error": "lidar not wired"}
-        dist, hit = get_lidar()
-        return {"ok": True, "distance_m": dist, "hit": hit}
-    
+    # --- Sensors ---   
     @app.get("/sensors")
     def sensors():
         if get_sensors is None:
@@ -65,11 +54,54 @@ def start_api(cmd_q: "queue.Queue", host: str, port: int, get_lidar=None, get_se
     # ---------- SERVER ----------
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
-    
-    def run():
-        server.run()
-
-    thread = threading.Thread(target=run, daemon=True)
+    thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
+    return server, thread
 
+
+def start_drone_api(cmd_q: "queue.Queue", host: str, port: int, get_sensors=None):
+    app = FastAPI()
+
+    # ---------- ENDPOINTS ----------
+    @app.get("/ping")
+    def ping():
+        return {"ok": True}
+    
+    # --- Locomotion ---
+    @app.post("/cmd_vel")
+    def cmd_vel(vx: float = 0.0, vy: float = 0.0, vz: float = 0.0, wz: float = 0.0):
+        """
+        vx, vy linear in m/s, vz altitude in m/s, wz angular in rad/s
+        """
+        cmd_q.put(("cmd_vel", float(vx), float(vy), float(vz), float(wz)))
+        return {"queued": True}
+    
+    @app.post("/stop")
+    def stop():
+        """
+        Cancel any queued move/rotate and zero base velocity
+        """
+        cmd_q.put(("stop",))
+        return {"queued": True}
+    
+    @app.post("/look")
+    def look(x: float = 0.0, y: float = 0.0):
+        """
+        Move the drone on-board camera
+        """
+        cmd_q.put(("look", float(x), float(y)))
+        return {"queued": True}
+    
+    # --- Sensors ---
+    @app.get("/sensors")
+    def sensors():
+        if get_sensors is None:
+            return {"ok": False, "error": "sensors are not wired"}
+        return {"ok": True, "sensors": get_sensors()}
+    
+    # ---------- SERVER ----------
+    config = uvicorn.Config(app, host=host, port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
     return server, thread

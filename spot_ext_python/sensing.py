@@ -2,15 +2,14 @@ import math
 import time
 import numpy as np
 
-import carb
 import omni.usd
 import omni.replicator.core as rep
 
 from pxr import UsdGeom, Sdf
 from isaacsim.sensors.physics import _sensor
-from omni.physx import get_physx_scene_query_interface
 
 from .utils import log
+
 
 
 # ----- Utils -----
@@ -35,38 +34,28 @@ def _get_world_pose_xy_yaw(prim_path: str):
     return x, y, z, yaw
 
 
-
 class SensorSuite:
     """
     All sensing state. Extension calls:
       - attach() once after Play (stage/prim paths exist)
       - update() each physics step
-      - get_lidar(), get_sensors() for the API
-      - set_lidar_config() when endpoint calls /lidar_config
+      - et_sensors() for the API
     """
 
     def __init__(
         self,
-        lidar_origin_path: str,
         cam_path: str,
         imu_path: str,
         cam_res=(640, 480),
         sensor_hz: float = 5.0,
     ):
         # Paths
-        self._lidar_origin_path = lidar_origin_path
         self._cam_path = cam_path
         self._imu_path = imu_path
 
         # Camera config
         self._cam_res = cam_res
         self._sensor_hz = float(sensor_hz)
-
-        # Lidar config/state
-        self._lidar_rel_yaw = 0.0       # radians, 0 = forward
-        self._lidar_max_dist = 10.0     # meters
-        self._lidar_last_dist = self._lidar_max_dist
-        self._lidar_last_hit = None
 
         # Replicator annotators
         self._rp = None
@@ -96,10 +85,6 @@ class SensorSuite:
         self._init_imu(self._imu_path)
 
     # ----- API getters -----
-    def get_lidar(self):
-        hit = str(self._lidar_last_hit) if self._lidar_last_hit else None
-        return float(self._lidar_last_dist), hit
-
     def get_sensors(self):
         """
         Unit in meters
@@ -128,42 +113,13 @@ class SensorSuite:
 
         return {k: safe(v) for k, v in s.items()}
 
-    # ----- Lidar config -----
-    def set_lidar_config(self, yaw_deg: float, max_dist: float):
-        self._lidar_rel_yaw = math.radians(float(yaw_deg))
-        self._lidar_max_dist = float(max_dist)
-        log(f"lidar_cfg: yaw_deg={yaw_deg}, max_dist={max_dist}")
-
     # ----- Update loop -----
     def update(self):
         """
         Call every physics step
-        - Lidar updates every step
         - Camera/IMU summaries update at SENSOR_HZ
         """
-        self._update_lidar_every_step()
         self._update_camera_imu_throttled()
-
-    def _update_lidar_every_step(self):
-        try:
-            x, y, z, yaw = _get_world_pose_xy_yaw(self._lidar_origin_path)
-
-            origin = carb.Float3(x, y, z + 0.30)  # lift ray origin a bit
-            a = yaw + self._lidar_rel_yaw
-            direction = carb.Float3(math.cos(a), math.sin(a), 0.0)
-
-            sq = get_physx_scene_query_interface()
-            hit = sq.raycast_closest(origin, direction, self._lidar_max_dist, True)
-
-            if hit and ("distance" in hit):
-                self._lidar_last_dist = float(hit["distance"])
-                self._lidar_last_hit = hit.get("rigid_body", None)
-            else:
-                self._lidar_last_dist = float(self._lidar_max_dist)
-                self._lidar_last_hit = None
-
-        except Exception as e:
-            log(f"lidar raycast failed: {e}")
 
     def _update_camera_imu_throttled(self):
         now = time.time()
@@ -203,14 +159,14 @@ class SensorSuite:
                     self._sensor_state["imu_ang_vel"] = [r.ang_vel_x, r.ang_vel_y, r.ang_vel_z]
                     self._sensor_state["imu_orientation"] = r.orientation  # quaternion
             except Exception as e:
-                log(f"imu read failed: {e}")
+                log(f"[SENSE] imu read failed: {e}")
 
     # ----- Camera / IMU init -----
     def _init_camera_depth(self, cam_path: str):
         stage = omni.usd.get_context().get_stage()
         prim = stage.GetPrimAtPath(cam_path)
         if not prim or not prim.IsValid() or not prim.IsA(UsdGeom.Camera):
-            log(f"Camera prim not found or not a UsdGeom.Camera: {cam_path}")
+            log(f"[SENSE] Camera prim not found or not a UsdGeom.Camera: {cam_path}")
             return
 
         self._rp = rep.create.render_product(Sdf.Path(cam_path), self._cam_res)
@@ -220,8 +176,8 @@ class SensorSuite:
         self._rgb_annot.attach(self._rp)
         self._depth_annot.attach(self._rp)
 
-        log(f"Camera+Depth ready: {cam_path} @ {self._cam_res}")
+        log(f"[SENSE] Camera+Depth ready: {cam_path} @ {self._cam_res}")
 
     def _init_imu(self, imu_path: str):
         self._imu_iface = _sensor.acquire_imu_sensor_interface()
-        log(f"IMU interface acquired; reading from {imu_path}")
+        log(f"[SENSE] IMU interface acquired; reading from {imu_path}")

@@ -1,5 +1,5 @@
-import asyncio
 import queue
+import asyncio
 import numpy as np
 
 import carb
@@ -7,22 +7,26 @@ import omni.ext
 import omni.kit.app
 import omni.timeline
 import omni.physx as physx
-
 from isaacsim.robot.policy.examples.robots import SpotFlatTerrainPolicy
 
-from .api_server import start_api
-from .control import SpotRuntime
 from .utils import log
+from .spot_control import SpotRuntime
+from .drone_control import DroneRuntime
+from .api_server import start_spot_api, start_drone_api
 
+WORLD_PATH = "/World"
 HOST = "127.0.0.1"
-PORT = 8001
 
-SPOT_PATH = "/World/Spot"
-SPOT_BODY_PATH = "/World/Spot/body"
+SPOT_PATH = WORLD_PATH + "/Spot"
+SPOT_BODY_PATH = SPOT_PATH + "/body"
+SPOT_CAM_PATH = SPOT_BODY_PATH + "/Spot_Cam"
+SPOT_IMU_PATH = SPOT_BODY_PATH + "/Imu_Sensor"
+SPOT_PORT = 8001
 
-LIDAR_ORIGIN = SPOT_PATH + "/body"
-CAM_PATH = SPOT_PATH + "/body/Spot_Front_Cam"
-IMU_PATH = SPOT_PATH + "/body/Imu_Sensor"
+DRONE_PATH = WORLD_PATH + "/Crazyflie"
+DRONE_CAM_PATH = DRONE_PATH + "/Crazyflie_Cam"
+DRONE_IMU_PATH = DRONE_PATH + "/Imu_Sensor"
+DRONE_PORT = 8002
 
 CAM_RES = (640, 480)
 SENSOR_HZ = 5.0
@@ -32,33 +36,47 @@ SENSOR_HZ = 5.0
 class Extension(omni.ext.IExt):
 
     def on_startup(self, ext_id: str):
-        log("startup")
+        log("[EXT] STARTUP")
 
         # Runtime state
         self._inited = False
         self._physx_sub = None
         self._physx_iface = None
         self.spot = None
+        self.drone = None
 
         # Commands + runtime
-        self.cmd_q = queue.Queue()
-        self.runtime = SpotRuntime(
-            cmd_q=self.cmd_q,
+        self.spot_cmd_q = queue.Queue()
+        self.spot_runtime = SpotRuntime(
+            cmd_q=self.spot_cmd_q,
             spot_body_path=SPOT_BODY_PATH,
-            lidar_origin_path=LIDAR_ORIGIN,
-            cam_path=CAM_PATH,
-            imu_path=IMU_PATH,
+            cam_path=SPOT_CAM_PATH,
+            imu_path=SPOT_IMU_PATH,
+            cam_res=CAM_RES,
+            sensor_hz=SENSOR_HZ,
+        )
+        self.drone_cmd_q = queue.Queue()
+        self.drone_runtime = DroneRuntime(
+            cmd_q=self.drone_cmd_q,
+            drone_path=DRONE_PATH,
+            cam_path=DRONE_CAM_PATH,
+            imu_path=DRONE_IMU_PATH,
             cam_res=CAM_RES,
             sensor_hz=SENSOR_HZ,
         )
 
-        # API server (unchanged endpoints)
-        self._server, self._api_thread = start_api(
-            self.cmd_q, HOST, PORT,
-            get_lidar=self.runtime.get_lidar,
-            get_sensors=self.runtime.get_sensors
-        )
-        log(f"api on http://{HOST}:{PORT}")
+        # API servers
+        self._spot_server, self._spot_api_thread = start_spot_api(
+            self.spot_cmd_q, HOST, SPOT_PORT
+            get_sensors=self.spot_runtime.get_sensors
+        ) 
+        log(f"Spot api on http://{HOST}:{SPOT_PORT}")
+
+        self._drone_server, self._drone_api_thread = start_drone_api(
+            self.drone_cmd_q, HOST, DRONE_PORT
+            get_sensors=self.drone_runtime.get_sensors
+        ) 
+        log(f"Drone api on http://{HOST}:{DRONE_PORT}")
 
         # Timeline subscription
         self._timeline = omni.timeline.get_timeline_interface()
@@ -66,12 +84,14 @@ class Extension(omni.ext.IExt):
         self._timeline_sub = stream.create_subscription_to_pop(self._on_timeline_event)
 
     def on_shutdown(self):
-        log("shutdown")
+        log("[EXT] SHUTDOWN")
 
         # Stop API
         try:
-            if getattr(self, "_server", None):
-                self._server.should_exit = True
+            if getattr(self, "_spot_server", None):
+                self._spot_server.should_exit = True
+            if getattr(self, "_drone_server", None):
+                self._drone_server.should_exit = True
         except Exception:
             pass
 
@@ -82,16 +102,22 @@ class Extension(omni.ext.IExt):
             pass
 
         self._timeline_sub = None
-        self._api_thread = None
-        self.runtime = None
+        self._spot_api_thread = None
+        self._drone_api_thread = None
+        self.spot_runtime = None
+        self.drone_runtime = None
+
         self.spot = None
+        self.drone = None
         self._inited = False
 
     def _on_timeline_event(self, event):
         # Stop -> request reset for next Play
         if not self._timeline.is_playing():
-            if self.runtime is not None:
-                self.runtime.request_reset()
+            if self.spot_runtime is not None:
+                self.spot_runtime.request_reset()
+            if self.drone_runtime is not None:
+                self.drone_runtime.request_reset()
 
         # First-ever Play -> spawn + subscribe
         if (not self._inited) and self._timeline.is_playing():
@@ -108,28 +134,28 @@ class Extension(omni.ext.IExt):
             log("PhysX not ready")
             return
 
-        # Spawn Spot policy robot
+        # Spawn bots + policy
         self.spot = SpotFlatTerrainPolicy(
             prim_path=SPOT_PATH,
             name="Spot",
             position=np.array([0.0, 0.0, 0.8])
         )
-        log("Spot spawned")
 
-        # Attach spot + init sensors (camera/imu) inside runtime
-        self.runtime.attach_spot(self.spot)
+        # Attach bots + init sensors
+        self.spot_runtime.attach_spot(self.spot)
+        self.drone_runtime.attach_drone(self.drone)
 
         # Subscribe physics step events
         self._physx_iface = physx.get_physx_interface()
         try:
             self._physx_sub = self._physx_iface.subscribe_physics_step_events(self._on_world_physics_step)
-            log("physx step subscribed")
         except Exception as e:
-            log(f"physx subscribe failed: {e}")
+            log(f"[EXT] Physx subscribe failed: {e}")
 
     def _on_world_physics_step(self, step_size: float):
         if not self._timeline.is_playing():
             return
-        if self.runtime is None:
+        if self.spot_runtime is None or self.drone_runtime is None:
             return
-        self.runtime.step(float(step_size))
+        self.spot_runtime.step(float(step_size))
+        self.drone_runtime.step(float(step_size))
