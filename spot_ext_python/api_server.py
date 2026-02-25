@@ -5,14 +5,15 @@ from fastapi import FastAPI
 import uvicorn
 
 
-def start_api(cmd_q: "queue.Queue", host: str, port: int, get_lidar=None):
+def start_api(cmd_q: "queue.Queue", host: str, port: int, get_lidar=None, get_sensors=None):
     app = FastAPI()
 
-    # ----- Endpoints -----
+    # ---------- EDNPOINTS ----------
     @app.get("/ping")
     def ping():
         return {"ok": True}
     
+    # --- Locomotion ---
     @app.post("/cmd_vel")
     def cmd_vel(vx: float = 0.0, vy: float = 0.0, wz: float = 0.0):
         """
@@ -42,6 +43,7 @@ def start_api(cmd_q: "queue.Queue", host: str, port: int, get_lidar=None):
         cmd_q.put(("stop",))
         return {"queued": True}
     
+    # --- Sensors ---
     @app.post("/lidar_config")
     def lidar_config(yaw_deg: float = 0.0, max_dist: float = 10.0):
         cmd_q.put(("lidar_cfg", float(yaw_deg), float(max_dist)))
@@ -53,8 +55,14 @@ def start_api(cmd_q: "queue.Queue", host: str, port: int, get_lidar=None):
             return {"ok": False, "error": "lidar not wired"}
         dist, hit = get_lidar()
         return {"ok": True, "distance_m": dist, "hit": hit}
+    
+    @app.get("/sensors")
+    def sensors():
+        if get_sensors is None:
+            return {"ok": False, "error": "sensors are not wired"}
+        return {"ok": True, "sensors": get_sensors()}
 
-    # ----- Server -----
+    # ---------- SERVER ----------
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
     

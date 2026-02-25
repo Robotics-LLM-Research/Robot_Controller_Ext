@@ -1,18 +1,21 @@
-import queue
-import math
 import carb
+import math
+import time
+import queue
 import numpy as np
 
 import omni.ext
 import omni.usd
+import omni.kit.app
 import omni.timeline
 import omni.physx as physx
-import omni.kit.app
+import omni.replicator.core as rep
 
-from pxr import UsdGeom
+from pxr import UsdGeom, Sdf
 from isaacsim.core.api import World
-from isaacsim.robot.policy.examples.robots import SpotFlatTerrainPolicy
+from isaacsim.sensors.physics import _sensor
 from omni.physx import get_physx_scene_query_interface
+from isaacsim.robot.policy.examples.robots import SpotFlatTerrainPolicy
 
 from .api_server import start_api
 
@@ -21,6 +24,10 @@ PORT = 8001
 
 SPOT_PATH = "/World/Spot"
 LIDAR_ORIGIN = SPOT_PATH + "/body"
+CAM_PATH = SPOT_PATH + "/body/Spot_Front_Cam"
+IMU_PATH = SPOT_PATH + "/body/Imu_Sensor"
+CAM_RES = (640, 480)
+SENSOR_HZ = 5.0
 
 def log(msg):
     carb.log_warn(f"[spot-ext] {msg}")
@@ -104,12 +111,52 @@ class Extension(omni.ext.IExt):
         self._lidar_last_dist = self._lidar_max_dist
         self._lidar_last_hit = None
 
+        # Sensors
+        self._rp = None
+        self._rgb_annot = None
+        self._depth_annot = None
+        self._last_sensor_t = 0.0
+        self._imu_iface = None
+
+        self.sensor_state = {
+            "front_clear_m": float("inf"),
+            "left_clear_m": float("inf"),
+            "right_clear_m": float("inf"),
+            "imu_lin_acc": [0.0, 0.0, 0.0],
+            "imu_ang_vel": [0.0, 0.0, 0.0],
+            "imu_orientation": None,
+        }
+
+        def _get_sensors():
+            """
+            Unit in meters
+            Outputs:
+                "front_clear_m": closest obstacle directly ahead
+                "left_clear_m": closest obstacle in the left region
+                "right_clear_m": closest obstacle in the right region
+                "imu_lin_acc": IMU linear acceleration [X, Y, Z]
+                "imu_ang_vel": IMU rotational velocity [X: roll, Y: pitch, Z: yaw]
+                "imu_orientation": Spot's 3D orientation [X, Y, Z, W]
+            """
+            s = dict(self.sensor_state)
+            ori = s.get("imu_orientation", None)
+            if ori is not None and not isinstance(ori, (list, tuple)):
+                try:
+                    s["imu_orientation"] = list(ori)
+                except Exception:
+                    s["imu_orientation"] = None
+            return s
+
         # --- API Server ---
         self.cmd_q = queue.Queue()
         def _get_lidar():
             return float(self._lidar_last_dist), (str(self._lidar_last_hit) if self._lidar_last_hit else None)
         
-        self._server, self._api_thread = start_api(self.cmd_q, HOST, PORT, get_lidar=_get_lidar)
+        self._server, self._api_thread = start_api(
+            self.cmd_q, HOST, PORT, 
+            get_lidar=_get_lidar,
+            get_sensors=_get_sensors
+            )
         log(f"api on http://{HOST}:{PORT}")
 
         # --- Timeline event ---
@@ -169,6 +216,10 @@ class Extension(omni.ext.IExt):
             position=np.array([0.0, 0.0, 0.8])
         )
         log("Spot spawned")
+
+        # Init camera
+        self._init_camera_depth(CAM_PATH)
+        self._init_imu(IMU_PATH)
      
         # Subscribe to physx step events
         self._physx_iface = physx.get_physx_interface()
@@ -226,6 +277,9 @@ class Extension(omni.ext.IExt):
             return
 
         dt = float(step_size)
+
+        # Update sensors
+        self._update_sensors()
 
         # Drain queue and apply locomotion
         self._process_cmd_queue()
@@ -359,3 +413,66 @@ class Extension(omni.ext.IExt):
         # If both finished, stop
         if (not self._move_active) and (not self._rot_active):
             self._base_cmd[:] = [0.0, 0.0, 0.0]
+
+    # ----- Sensors -----
+    def _init_camera_depth(self, cam_path: str):
+        stage = omni.usd.get_context().get_stage()
+        prim = stage.GetPrimAtPath(cam_path)
+        if not prim or not prim.IsValid() or not prim.IsA(UsdGeom.Camera):
+            log(f"Camera prim not found or not a UsdGeom.Camera: {cam_path}")
+            return
+
+        # Create render product + annotators
+        self._rp = rep.create.render_product(Sdf.Path(cam_path), CAM_RES)
+
+        # Note: in some builds "rgb" returns RGBA (you saw (H,W,4)), that's fine.
+        self._rgb_annot = rep.AnnotatorRegistry.get_annotator("rgb")
+        self._depth_annot = rep.AnnotatorRegistry.get_annotator("distance_to_camera")
+
+        self._rgb_annot.attach(self._rp)
+        self._depth_annot.attach(self._rp)
+
+        log(f"Camera+Depth ready: {cam_path} @ {CAM_RES}")
+
+    def _init_imu(self, imu_path: str):
+        self._imu_iface = _sensor.acquire_imu_sensor_interface()
+        log(f"IMU interface acquired; reading from {imu_path}")
+
+    def _update_sensors(self):
+        now = time.time()
+        if (now - self._last_sensor_t) < (1.0 / SENSOR_HZ):
+            return
+        self._last_sensor_t = now
+
+        #  DEPTH SUMMARY
+        if self._depth_annot is not None:
+            depth = self._depth_annot.get_data()  # (H,W) float32 meters
+
+            # Robust min-distance in 3 horizontal bands (left/center/right)
+            h, w = depth.shape
+            band_y0, band_y1 = int(h * 0.45), int(h * 0.55)
+
+            def finite_min(arr):
+                arr = arr[np.isfinite(arr)]
+                return float(arr.min()) if arr.size else float("inf")
+
+            left = finite_min(depth[band_y0:band_y1, int(w*0.10):int(w*0.30)])
+            front = finite_min(depth[band_y0:band_y1, int(w*0.45):int(w*0.55)])
+            right = finite_min(depth[band_y0:band_y1, int(w*0.70):int(w*0.90)])
+
+            # Store
+            self.sensor_state["front_clear_m"] = front
+            self.sensor_state["left_clear_m"] = left
+            self.sensor_state["right_clear_m"] = right
+
+        # ---- RGB (optional to store raw; usually you compress/summarize instead) ----
+        # If you *really* want the raw frame, this returns (H,W,4) uint8 often.
+        # rgb = self._rgb_annot.get_data()
+
+        # ---- IMU ----
+        if self._imu_iface is not None:
+            r = self._imu_iface.get_sensor_reading(IMU_PATH, use_latest_data=True, read_gravity=True)
+            if getattr(r, "is_valid", False):
+                self.sensor_state["imu_lin_acc"] = [r.lin_acc_x, r.lin_acc_y, r.lin_acc_z]
+                self.sensor_state["imu_ang_vel"] = [r.ang_vel_x, r.ang_vel_y, r.ang_vel_z]
+                self.sensor_state["imu_orientation"] = r.orientation  # quaternion
