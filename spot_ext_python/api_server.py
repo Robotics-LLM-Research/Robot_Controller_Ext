@@ -1,14 +1,14 @@
 import threading
 import queue
 
-from fastapi import FastAPI
 import uvicorn
+from fastapi import FastAPI
 
 
 def start_api(cmd_q: "queue.Queue", host: str, port: int, get_lidar=None, get_sensors=None):
     app = FastAPI()
 
-    # ---------- EDNPOINTS ----------
+    # ---------- ENDPOINTS ----------
     @app.get("/ping")
     def ping():
         return {"ok": True}
