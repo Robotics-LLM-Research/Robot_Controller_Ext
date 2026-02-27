@@ -1,4 +1,5 @@
 import carb
+import math
 
 
 
@@ -12,3 +13,10 @@ def log(msg: str, level: int):
         carb.log_warn(ext_msg)
     if level == 3:
         carb.log_error(ext_msg)
+
+def _wrap_pi(a: float) -> float:
+    """
+    Normalize any anlge to the range (-π, π]. Used for "turn to heading"
+    Returns: warped angle radians
+    """
+    return math.atan2(math.sin(a), math.cos(a))

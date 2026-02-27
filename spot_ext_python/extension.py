@@ -172,4 +172,4 @@ class Extension(omni.ext.IExt):
         if self.spot_runtime is None or self.drone_runtime is None:
             return
         self.spot_runtime.step(float(step_size))
-        self.drone_runtime.step()
+        self.drone_runtime.step(float(step_size))

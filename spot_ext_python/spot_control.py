@@ -1,22 +1,18 @@
 import math
 import queue
-import numpy as np
 
-import carb
 import omni.usd
+import numpy as np
 from pxr import UsdGeom
-from omni.isaac.dynamic_control import _dynamic_control
 
-from .utils import log
+from .utils import log, _wrap_pi
 from .sensing import SensorSuite
 
 
 
 # ----- Utils -----
-def _wrap_pi(a: float) -> float:
-    return math.atan2(math.sin(a), math.cos(a))
-
 def _get_world_pose_xy_yaw(prim_path: str):
+    """ Return (x, y, z, yaw) of prim in world frame """
     stage = omni.usd.get_context().get_stage()
     prim = stage.GetPrimAtPath(prim_path)
     xform = UsdGeom.Xformable(prim)
@@ -33,23 +29,16 @@ def _get_world_pose_xy_yaw(prim_path: str):
 
 
 class MotionController:
-    """
-    All locomotion state and creates base_cmd = [vx, vy, wz].
-    Handles:
-      - /cmd_vel (manual)
-      - /move (distance goal)
-      - /rotate (yaw goal)
-      - /stop
-    """
+    """ Stores the "current desired motion" and interpret commands """
 
     def __init__(self, spot_body_path: str):
         self._spot_body_path = spot_body_path
-        self.base_cmd = np.zeros(3)  # vx, vy, wz
+        self.base_cmd = np.zeros(3)
         self._manual_cmd = np.zeros(3)
 
         # Move goal
         self._move_active = False
-        self._move_remaining = 0.0   # meters remaining (+forward, -back)
+        self._move_remaining = 0.0   # +forward, -backward
         self._move_speed = 2.0       # m/s
 
         # Rotate goal
@@ -68,6 +57,7 @@ class MotionController:
     def reset(self):
         self.base_cmd[:] = [0.0, 0.0, 0.0]
         self._manual_cmd[:] = [0.0, 0.0, 0.0]
+
         self._move_active = False
         self._move_remaining = 0.0
         self._rot_active = False
@@ -79,10 +69,13 @@ class MotionController:
 
         if kind == "cmd_vel":
             _, vx, vy, wz = cmd
+
+            # Manual command overrides goals
             self._move_active = False
             self._rot_active = False
             self._move_remaining = 0.0
             self._rot_target_yaw = None
+            
             self._manual_cmd[:] = [float(vx), float(vy), float(wz)]
             log(f"[SPOT] cmd_vel set: vx={vx}, vy={vy}, wz={wz}", 1)
 
@@ -117,13 +110,7 @@ class MotionController:
         return True
 
     def update(self, dt: float):
-        """
-        Compute base_cmd for this step
-        Priority:
-          1) goals (move/rotate) if active
-          2) manual cmd_vel if non-zero
-          3) hold heading if idle
-        """
+        """ Returns: base_cmd """
         dt = float(dt)
 
         # --- Goal mode ---
@@ -138,7 +125,6 @@ class MotionController:
                     vx = self._move_speed * direction
 
                     next_remaining = self._move_remaining - (vx * dt)
-                    # if we crossed 0, clamp & stop
                     if (self._move_remaining > 0 and next_remaining <= 0) or (self._move_remaining < 0 and next_remaining >= 0):
                         self._move_remaining = 0.0
                         self._move_active = False
@@ -191,11 +177,10 @@ class MotionController:
 
 class SpotRuntime:
     """
-    Single object the Extension talks to
-    Extension only does:
-      - runtime.attach_spot(spot) after Play
-      - runtime.request_reset() when timeline stops
-      - runtime.step(dt) each physics step
+    Object that extension calls every physics step
+        - Drains queued commands into the motion controller
+        - Updates sensors
+        - Applies velocities to drone rigidbody
     """
 
     def __init__(
@@ -222,29 +207,43 @@ class SpotRuntime:
             sensor_hz=sensor_hz,
         )
 
-    # ----- API hooks -----
+    # ---------- API hooks ----------
     def get_sensors(self):
         return self.sensing.get_sensors()
 
-    # ----- Wiring -----
+    # ---------- Wiring ----------
     def attach_spot(self, spot):
+        """ Connects sensors to prism """
         self.spot = spot
         self.sensing.attach()
 
     def request_reset(self):
+        """ Next setp will reset step """
         self._reset_needed = True
 
+    # ---------- Physics Loop ----------
+    def _drain_cmd_queue(self):
+        """ Empties queue and applies commands in order """
+        while True:
+            try:
+                cmd = self.cmd_q.get_nowait()
+            except queue.Empty:
+                break
+
+            handled = self.motion.handle_cmd(cmd)
+            if not handled:
+                log(f"[SPOT] unknown cmd: {cmd}", 3)
+
     def step(self, dt: float):
-        """
-        Called from the PhysX step callback.
-        """
-        # Drain commands
+        """ Physics tick called from the PhysX step callback """
+        dt = float(dt)
         self._drain_cmd_queue()
+        self.sensing.update()
 
         if self.spot is None:
             return
 
-        # Reset requested (timeline stop -> play)
+        # Handle timeline resets
         if self._reset_needed:
             self._reset_needed = False
             self.motion.reset()
@@ -262,9 +261,6 @@ class SpotRuntime:
                 log(f"[SPOT] spot.initialize not ready yet: {e}", 3)
             return
 
-        # Update sensing
-        self.sensing.update()
-
         # Warmup delay before commanding motion
         if self._warmup_left > 0:
             self._warmup_left -= 1
@@ -276,15 +272,3 @@ class SpotRuntime:
             self.spot.forward(float(dt), base_cmd)
         except Exception as e:
             log(f"[SPOT] spot.forward failed: {e}", 3)
-
-    def _drain_cmd_queue(self):
-        while True:
-            try:
-                cmd = self.cmd_q.get_nowait()
-            except queue.Empty:
-                break
-
-            # Route locomotion commands to motion controller
-            handled = self.motion.handle_cmd(cmd)
-            if not handled:
-                log(f"[SPOT] unknown cmd: {cmd}", 3)

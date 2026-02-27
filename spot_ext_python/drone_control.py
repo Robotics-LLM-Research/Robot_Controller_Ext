@@ -5,19 +5,12 @@ import numpy as np
 import carb
 from omni.isaac.dynamic_control import _dynamic_control
 
-from .utils import log
+from .utils import log, _wrap_pi
 from .sensing import SensorSuite
 
 
 
 # ----- Utils -----
-def _wrap_pi(a: float) -> float:
-    """
-    Normalize any anlge to the range (-π, π]. Used for "turn to heading"
-    Returns: warped angle radians
-    """
-    return math.atan2(math.sin(a), math.cos(a))
-
 def _quat_to_rpy(q) -> tuple[float, float, float]:
     """ Convert a quaternion (x,y,z,w) into roll/pitch/yaw in radians """
     x = float(q.x)
@@ -38,40 +31,188 @@ def _quat_to_rpy(q) -> tuple[float, float, float]:
     roll = math.atan2(r21, r22)
     return roll, pitch, yaw
 
+
 class DroneMotionController:
     """ Stores the "current desired motion" and interpret commands """
 
     def __init__(self):
-        """ Creates base command [vx, vy, vz, wz] as 0s """
         self.base_cmd = np.zeros(4, dtype=np.float32)
+        self._manual_cmd = np.zeros(4, dtype=np.float32)
 
-    def update(self):
-        """ Returns current stored command """
-        return self.base_cmd
+        # Linear goal
+        self._fwd_active = False
+        self._lat_active = False
+        self._fwd_remaining = 0.0       # +forward, -backward
+        self._lat_remaining = 0.0       # +left, -right
+        self._move_speed = 4.0          # m/s
+
+        # Rotate goal
+        self._rot_active = False
+        self._rot_target_yaw = None
+        self._rot_pending_delta = 0.0   # radians waiting to be applied
+        self._rot_kp = 4.0              # propotional gain (more or less rotation speed)
+        self._rot_max_wz = 1.0
+        self._rot_tol = math.radians(2.0)
+
+        # Altitude goal
+        self._alt_target_z = None
+        self._alt_pending_delta = 0.0   # meters waiting to be applied
+        self._alt_tol = 0.05            # meters
 
     def reset(self):
-        """ Sets all commands to 0 """
         self.base_cmd[:] = 0.0
+        self._manual_cmd[:] = 0.0
+
+        self._fwd_active = False
+        self._lat_active = False
+        self._fwd_remaining = 0.0
+        self._lat_remaining = 0.0
+
+        self._rot_active = False
+        self._rot_target_yaw = None
+        self._rot_pending_delta = 0.0
+
+        self._alt_target_z = None
+        self._alt_pending_delta = 0.0
 
     def handle_cmd(self, cmd):
-        """
-        Commands:
-        - cmd_vel: continuous motion
-        - stop: stops all commands
-        """
         kind = cmd[0]
+
         if kind == "cmd_vel":
             _, vx, vy, vz, wz = cmd
-            self.base_cmd[:] = [vx, vy, vz, wz]
-            log(f"[DRONE] cmd_vel set: vx={vx}, vy={vy}, vz={vz}, wz={wz}", 1)
-            return True
+           
+            # Manual command overrides goals
+            self._fwd_active = self._lat_active = False
+            self._fwd_remaining = self._lat_remaining = 0.0
+            self._rot_active = False
+            self._rot_target_yaw = None
+            self._rot_pending_delta = 0.0
+            self._alt_pending_delta = 0.0
+
+            self._manual_cmd[:] = [float(vx), float(vy), float(vz), float(wz)]
+            log(f"[DRONE] cmd_vel set: vx={vx}, vy={vy}, vz={vz}, wz={wz}", 2)
         
-        if kind == "stop":
+        elif kind in ("move_fwd"):
+            meters = float(cmd[1])
+            self._manual_cmd[:] = 0.0
+            self._fwd_remaining += meters
+            self._fwd_active = True
+            log(f"[DRONE] move_fwd queued: {meters} m (remaining={self._fwd_remaining} m)", 2)
+
+        elif kind == "move_lat":
+            meters = float(cmd[1])
+            self._manual_cmd[:] = 0.0
+            self._lat_remaining += meters
+            self._lat_active = True
+            log(f"[DRONE] move_lat queued: {meters} m (remaining={self._lat_remaining} m)", 2)
+
+        elif kind == "rotate":
+            deg = float(cmd[1])
+            self._manual_cmd[:] = 0.0
+            self._rot_pending_delta += math.radians(deg)
+            log(f"[DRONE] rotate queued: {deg} deg (pending_delta_rad={self._rot_pending_delta:.3f})", 2)
+
+        elif kind == "raise_alt":
+            meters = float(cmd[1])
+            self._manual_cmd[:] = 0.0
+            self._alt_pending_delta += meters
+            log(f"[DRONE] raise_alt queued: {meters} m (pending_delta={self._alt_pending_delta:.3f})", 2)
+        
+        elif kind == "stop":
             self.reset()
-            log("[DRONE] stop", 1)
-            return True
+            log("[DRONE] stop", 2)
+
+        else:
+            return False
         
-        return False
+        return True
+    
+    def update(self, dt: float, cur_yaw: float, cur_z: float):
+        """ Returns: (base_cmd, z_hold_target) """
+        dt = float(dt)
+
+        # Apply any pending rotate deltas using the current yaw
+        if abs(self._rot_pending_delta) > 1e-9:
+            if self._rot_target_yaw is None:
+                self._rot_target_yaw = _wrap_pi(cur_yaw + self._rot_pending_delta)
+                self._rot_active = True
+            else:
+                self._rot_target_yaw = _wrap_pi(self._rot_target_yaw + self._rot_pending_delta)
+                self._rot_active = True
+            self._rot_pending_delta = 0.0
+
+        # Apply any pending altitude deltas using the current z
+        if abs(self._alt_pending_delta) > 1e-9:
+            if self._alt_target_z is None:
+                self._alt_target_z = cur_z + self._alt_pending_delta
+            else:
+                self._alt_target_z = self._alt_target_z + self._alt_pending_delta
+            self._alt_pending_delta = 0.0
+
+        # --- Goal mode ---
+        goal_active = self._fwd_active or self._lat_active or self._rot_active or (self._alt_target_z is not None)
+        if goal_active:
+            vx = 0.0
+            vy = 0.0
+            wz = 0.0
+
+            # Forward/back distance
+            if self._fwd_active:
+                if abs(self._fwd_remaining) > 1e-4:
+                    direction = 1.0 if self._fwd_remaining > 0 else -1.0
+                    vx = self._move_speed * direction
+                    next_remaining = self._fwd_remaining - (vx * dt)
+                    if (self._fwd_remaining > 0 and next_remaining <= 0) or (self._fwd_remaining < 0 and next_remaining >= 0):
+                        self._fwd_remaining = 0.0
+                        self._fwd_active = False
+                        vx = 0.0
+                    else:
+                        self._fwd_remaining = next_remaining
+                else:
+                    self._fwd_remaining = 0.0
+                    self._fwd_active = False
+
+            # Left/right distance
+            if self._lat_active:
+                if abs(self._lat_remaining) > 1e-4:
+                    direction = 1.0 if self._lat_remaining > 0 else -1.0
+                    vy = self._move_speed * direction
+                    next_remaining = self._lat_remaining - (vy * dt)
+                    if (self._lat_remaining > 0 and next_remaining <= 0) or (self._lat_remaining < 0 and next_remaining >= 0):
+                        self._lat_remaining = 0.0
+                        self._lat_active = False
+                        vy = 0.0
+                    else:
+                        self._lat_remaining = next_remaining
+                else:
+                    self._lat_remaining = 0.0
+                    self._lat_active = False
+
+            # Rotate
+            if self._rot_active and self._rot_target_yaw is not None:
+                err = _wrap_pi(self._rot_target_yaw - cur_yaw)
+                if abs(err) < self._rot_tol:
+                    self._rot_active = False
+                    self._rot_target_yaw = None
+                    wz = 0.0
+                else:
+                    wz = max(-self._rot_max_wz, min(self._rot_max_wz, self._rot_kp * err))
+
+            # Altitude done check
+            if self._alt_target_z is not None:
+                if abs(self._alt_target_z - cur_z) < self._alt_tol:
+                    pass
+
+            self.base_cmd[:] = [vx, vy, 0.0, wz]
+            return self.base_cmd, self._alt_target_z
+
+        # --- Manual cmd_vel mode ---
+        if float(np.linalg.norm(self._manual_cmd)) > 1e-9:
+            self.base_cmd[:] = self._manual_cmd
+            return self.base_cmd, None
+
+        self.base_cmd[:] = 0.0
+        return self.base_cmd, None
 
 
 class DroneRuntime:
@@ -141,10 +282,6 @@ class DroneRuntime:
         # Zero out all current linear/angular velocity
         self._dc.set_rigid_body_linear_velocity(self._body, carb.Float3(0.0, 0.0, 0.0))
         self._dc.set_rigid_body_angular_velocity(self._body, carb.Float3(0.0, 0.0, 0.0))
-
-        ##################################################################################### DEBUG PRINT
-        log(f"[DRONE] Using rigid body handle {self._body} for {self._drone_body_path}", -1) 
-        #####################################################################################
         return True
 
     # ---------- Physics Loop ----------
@@ -160,8 +297,9 @@ class DroneRuntime:
             if not handled:
                 log(f"[DRONE] unknown cmd: {cmd}", 3)
 
-    def step(self):
+    def step(self, dt: float):
         """ Physics tick called from the PhysX step callback """
+        dt = float(dt)
         self._drain_cmd_queue()
         self.sensing.update()
         
@@ -196,11 +334,16 @@ class DroneRuntime:
         if self._z_hold is None:
             self._z_hold = z
 
-        # cmd from API 
-        vx_b, vy_b, vz_cmd, wz_cmd = [float(x) for x in self.motion.update()]
-
-        # orientation from PhysX pose
+        # Get orientation from PhysX pose
         roll, pitch, yaw = _quat_to_rpy(pose.r)
+
+        # Execute cmd from API 
+        base_cmd, z_hold_target = self.motion.update(dt, yaw, z)
+
+        if z_hold_target is not None:
+            self._z_hold = float(z_hold_target)
+
+        vx_b, vy_b, vz_cmd, wz_cmd = [float(x) for x in base_cmd]        
 
         # body -> world velocity transform using yaw
         cos_yaw, sin_yaw = math.cos(yaw), math.sin(yaw)

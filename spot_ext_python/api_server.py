@@ -14,11 +14,12 @@ def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_sensors=None)
     def ping():
         return {"ok": True}
     
-    # --- Locomotion ---
+    # ----- Locomotion -----
+    # --- Base ---
     @app.post("/cmd_vel")
     def cmd_vel(vx: float = 0.0, vy: float = 0.0, wz: float = 0.0):
         """
-        Applies continuous velocity
+        Apply continuous velocity
         Linear (m/s) and angular (rads/s):
             - vx: pos -> forward || neg -> backward
             - vy: pos -> left || neg -> right
@@ -33,15 +34,16 @@ def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_sensors=None)
         cmd_q.put(("stop",))
         return {"queued": True}
   
+    # --- Goal Based ---
     @app.post("/move")
     def move(meters: float = 1.0):
-        """ Move forward(+) / backward(-) a certain distance in meters """
+        """ Move forward(+) / backward(-) by meters """
         cmd_q.put(("move", float(meters)))
         return {"queued": True}
     
     @app.post("/rotate")
     def rotate(deg: float = 90.0):
-        """ Rotate counter-clockwise(+) / clockwise(-) a certain angle of degrees """
+        """ Rotate counter-clockwise(+) / clockwise(-) by degrees """
         cmd_q.put(("rotate", float(deg)))
         return {"queued": True}
     
@@ -68,11 +70,12 @@ def start_drone_api(cmd_q: "queue.Queue", host: str, port: int, get_sensors=None
     def ping():
         return {"ok": True}
     
-    # --- Locomotion ---
+    # ----- Locomotion -----
+    # --- Base ---
     @app.post("/cmd_vel")
     def cmd_vel(vx: float = 0.0, vy: float = 0.0, vz: float = 0.0, wz: float = 0.0):
         """
-        Applies continuous velocity
+        Apply continuous velocity
         Linear (m/s) and angular (rads/s):
             - vx: pos -> forward || neg->backward
             - vy: pos -> left || neg -> right
@@ -88,26 +91,35 @@ def start_drone_api(cmd_q: "queue.Queue", host: str, port: int, get_sensors=None
         cmd_q.put(("stop",))
         return {"queued": True}
     
-    # TODO
-    @app.post("/move")
-    def move(meters: float = 1.0):
-        """ Move forward(+) / backward(-) a certain distance in meters """
-        cmd_q.put(("move", float(meters)))
+    # --- Goal Based ---
+    @app.post("/move_fwd")
+    def move_fwd(meters: float = 1.0):
+        """ Move forward(+) / backward(-) by meters """
+        cmd_q.put(("move_fwd", float(meters)))
         return {"queued": True}
     
-    # TODO
+    @app.post("/move_lat")
+    def move_lateral(meters: float = 1.0):
+        """ Move left(+) / right(-) by meters """
+        cmd_q.put(("move_lat", float(meters)))
+        return {"queued": True}
+    
+    @app.post("/raise_alt")
+    def raise_alt(meters: float = 1.0):
+        """ Change altitude up(+) / down(-) by meters """
+        cmd_q.put(("raise_alt", float(meters)))
+        return {"queued": True}
+    
     @app.post("/rotate")
     def rotate(deg: float = 90.0):
-        """ Rotate counter-clockwise(+) / clockwise(-) a certain angle of degrees """
+        """ Rotate counter-clockwise(+) / clockwise(-) by degrees """
         cmd_q.put(("rotate", float(deg)))
         return {"queued": True}
     
-    # TODO
+    # --- Equipment ---
     @app.post("/look")
     def look(x: float = 0.0, y: float = 0.0):
-        """
-        Move the drone on-board camera
-        """
+        """ Move the drone on-board camera """
         cmd_q.put(("look", float(x), float(y)))
         return {"queued": True}
     
