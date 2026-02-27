@@ -84,14 +84,14 @@ class MotionController:
             self._move_remaining = 0.0
             self._rot_target_yaw = None
             self._manual_cmd[:] = [float(vx), float(vy), float(wz)]
-            log(f"[SPOT] cmd_vel set: vx={vx}, vy={vy}, wz={wz}")
+            log(f"[SPOT] cmd_vel set: vx={vx}, vy={vy}, wz={wz}", 1)
 
         elif kind == "move":
             meters = float(cmd[1])
             self._manual_cmd[:] = [0.0, 0.0, 0.0]
             self._move_remaining += meters
             self._move_active = True
-            log(f"[SPOT] move queued: {meters} m (remaining={self._move_remaining} m)")
+            log(f"[SPOT] move queued: {meters} m (remaining={self._move_remaining} m)", 1)
 
         elif kind == "rotate":
             deg = float(cmd[1])
@@ -105,11 +105,11 @@ class MotionController:
                 self._rot_target_yaw = _wrap_pi(cur_yaw + delta)
                 self._rot_active = True
 
-            log(f"[SPOT] rotate target set: {deg} deg -> target_yaw={self._rot_target_yaw:.3f}")
+            log(f"[SPOT] rotate target set: {deg} deg -> target_yaw={self._rot_target_yaw:.3f}", 1)
 
         elif kind == "stop":
             self.reset()
-            log("[SPOT] stop: cleared base cmd + goals")
+            log("[SPOT] stop: cleared base cmd + goals", 1)
 
         else:
             return False
@@ -230,7 +230,6 @@ class SpotRuntime:
     def attach_spot(self, spot):
         self.spot = spot
         self.sensing.attach()
-        log("runtime attached (spot + sensors)")
 
     def request_reset(self):
         self._reset_needed = True
@@ -260,7 +259,7 @@ class SpotRuntime:
                 self._policy_inited = True
                 self._warmup_left = 60
             except Exception as e:
-                log(f"[SPOT] spot.initialize not ready yet: {e}")
+                log(f"[SPOT] spot.initialize not ready yet: {e}", 3)
             return
 
         # Update sensing
@@ -276,7 +275,7 @@ class SpotRuntime:
         try:
             self.spot.forward(float(dt), base_cmd)
         except Exception as e:
-            log(f"[SPOT] spot.forward failed: {e}")
+            log(f"[SPOT] spot.forward failed: {e}", 3)
 
     def _drain_cmd_queue(self):
         while True:
@@ -288,4 +287,4 @@ class SpotRuntime:
             # Route locomotion commands to motion controller
             handled = self.motion.handle_cmd(cmd)
             if not handled:
-                log(f"[SPOT] unknown cmd: {cmd}")
+                log(f"[SPOT] unknown cmd: {cmd}", 3)

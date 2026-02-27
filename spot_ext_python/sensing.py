@@ -82,7 +82,8 @@ class SensorSuite:
     def attach(self):
         """Call once after Play when camera + imu prims exist"""
         self._init_camera_depth(self._cam_path)
-        self._init_imu(self._imu_path)
+        if self._imu_path is not None:
+            self._init_imu(self._imu_path)
 
     # ----- API getters -----
     def get_sensors(self):
@@ -147,7 +148,7 @@ class SensorSuite:
                 self._sensor_state["right_clear_m"] = right
 
         # IMU
-        if self._imu_iface is not None:
+        if self._imu_path is not None and self._imu_iface is not None:
             try:
                 r = self._imu_iface.get_sensor_reading(
                     self._imu_path,
@@ -159,14 +160,14 @@ class SensorSuite:
                     self._sensor_state["imu_ang_vel"] = [r.ang_vel_x, r.ang_vel_y, r.ang_vel_z]
                     self._sensor_state["imu_orientation"] = r.orientation  # quaternion
             except Exception as e:
-                log(f"[SENSE] imu read failed: {e}")
+                log(f"[SENSE] imu read failed: {e}", 3)
 
     # ----- Camera / IMU init -----
     def _init_camera_depth(self, cam_path: str):
         stage = omni.usd.get_context().get_stage()
         prim = stage.GetPrimAtPath(cam_path)
         if not prim or not prim.IsValid() or not prim.IsA(UsdGeom.Camera):
-            log(f"[SENSE] Camera prim not found or not a UsdGeom.Camera: {cam_path}")
+            log(f"[SENSE] Camera prim not found or not a UsdGeom.Camera: {cam_path}", 3)
             return
 
         self._rp = rep.create.render_product(Sdf.Path(cam_path), self._cam_res)
@@ -176,8 +177,8 @@ class SensorSuite:
         self._rgb_annot.attach(self._rp)
         self._depth_annot.attach(self._rp)
 
-        log(f"[SENSE] Camera+Depth ready: {cam_path} @ {self._cam_res}")
+        log(f"[SENSE] Camera + Depth ready: {cam_path} @ {self._cam_res}", 2)
 
     def _init_imu(self, imu_path: str):
         self._imu_iface = _sensor.acquire_imu_sensor_interface()
-        log(f"[SENSE] IMU interface acquired; reading from {imu_path}")
+        log(f"[SENSE] IMU interface acquired; reading from {imu_path}", 2)

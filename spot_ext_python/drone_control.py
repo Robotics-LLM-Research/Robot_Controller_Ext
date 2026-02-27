@@ -3,8 +3,6 @@ import queue
 import numpy as np
 
 import carb
-import omni.usd
-from pxr import UsdGeom
 from omni.isaac.dynamic_control import _dynamic_control
 
 from .utils import log
@@ -14,182 +12,92 @@ from .sensing import SensorSuite
 
 # ----- Utils -----
 def _wrap_pi(a: float) -> float:
+    """
+    Normalize any anlge to the range (-π, π]. Used for "turn to heading"
+    Returns: warped angle radians
+    """
     return math.atan2(math.sin(a), math.cos(a))
 
-def _get_world_pose_xy_yaw(prim_path: str):
-    stage = omni.usd.get_context().get_stage()
-    prim = stage.GetPrimAtPath(prim_path)
-    xform = UsdGeom.Xformable(prim)
+def _quat_to_rpy(q) -> tuple[float, float, float]:
+    """ Convert a quaternion (x,y,z,w) into roll/pitch/yaw in radians """
+    x = float(q.x)
+    y = float(q.y)
+    z = float(q.z)
+    w = float(q.w)
 
-    cache = UsdGeom.XformCache()
-    m = cache.GetLocalToWorldTransform(prim)
+    # Rotation matrix from quaternion
+    r00 = 1.0 - 2.0 * (y * y + z * z)
+    r10 = 2.0 * (x * y + w * z)
 
-    p = m.ExtractTranslation()
-    x, y, z = float(p[0]), float(p[1]), float(p[2])
+    r20 = 2.0 * (x * z - w * y)
+    r21 = 2.0 * (y * z + w * x)
+    r22 = 1.0 - 2.0 * (x * x + y * y)
 
-    r = m.ExtractRotationMatrix()
-    yaw = math.atan2(float(r[1][0]), float(r[0][0]))
-    return x, y, z, yaw
+    yaw = math.atan2(r10, r00)
+    pitch = math.atan2(-r20, math.sqrt(r21 * r21 + r22 * r22))
+    roll = math.atan2(r21, r22)
+    return roll, pitch, yaw
 
+class DroneMotionController:
+    """ Stores the "current desired motion" and interpret commands """
 
-class MotionController:
-    """
-    All locomotion state and creates base_cmd = [vx, vy, wz].
-    Handles:
-      - /cmd_vel (manual)
-      - /move (distance goal)
-      - /rotate (yaw goal)
-      - /stop
-    """
+    def __init__(self):
+        """ Creates base command [vx, vy, vz, wz] as 0s """
+        self.base_cmd = np.zeros(4, dtype=np.float32)
 
-    def __init__(self, drone_body_path: str):
-        self._drone_body_path = drone_body_path
-        self.base_cmd = np.zeros(3)  # vx, vy, wz
-        self._manual_cmd = np.zeros(3)
-
-        # Move goal
-        self._move_active = False
-        self._move_remaining = 0.0   # meters remaining (+forward, -back)
-        self._move_speed = 2.0       # m/s
-
-        # Rotate goal
-        self._rot_active = False
-        self._rot_target_yaw = None
-        self._rot_kp = 2.0
-        self._rot_max_wz = 1.0
-        self._rot_tol = math.radians(2.0)
+    def update(self):
+        """ Returns current stored command """
+        return self.base_cmd
 
     def reset(self):
-        self.base_cmd[:] = [0.0, 0.0, 0.0]
-        self._manual_cmd[:] = [0.0, 0.0, 0.0]
-        self._move_active = False
-        self._move_remaining = 0.0
-        self._rot_active = False
-        self._rot_target_yaw = None
+        """ Sets all commands to 0 """
+        self.base_cmd[:] = 0.0
 
     def handle_cmd(self, cmd):
+        """
+        Commands:
+        - cmd_vel: continuous motion
+        - stop: stops all commands
+        """
         kind = cmd[0]
-
         if kind == "cmd_vel":
-            _, vx, vy, wz = cmd
-            self._move_active = False
-            self._rot_active = False
-            self._move_remaining = 0.0
-            self._rot_target_yaw = None
-            self._manual_cmd[:] = [float(vx), float(vy), float(wz)]
-            log(f"[DRONE] cmd_vel set: vx={vx}, vy={vy}, wz={wz}")
-
-        elif kind == "move":
-            meters = float(cmd[1])
-            self._manual_cmd[:] = [0.0, 0.0, 0.0]
-            self._move_remaining += meters
-            self._move_active = True
-            log(f"[DRONE] move queued: {meters} m (remaining={self._move_remaining} m)")
-
-        elif kind == "rotate":
-            deg = float(cmd[1])
-            self._manual_cmd[:] = [0.0, 0.0, 0.0]
-            delta = math.radians(deg)
-            _, _, _, cur_yaw = _get_world_pose_xy_yaw(self._droe_path)
-
-            if self._rot_active and self._rot_target_yaw is not None:
-                self._rot_target_yaw = _wrap_pi(self._rot_target_yaw + delta)
-            else:
-                self._rot_target_yaw = _wrap_pi(cur_yaw + delta)
-                self._rot_active = True
-
-            log(f"[DRONE] rotate target set: {deg} deg -> target_yaw={self._rot_target_yaw:.3f}")
-
-        elif kind == "stop":
+            _, vx, vy, vz, wz = cmd
+            self.base_cmd[:] = [vx, vy, vz, wz]
+            log(f"[DRONE] cmd_vel set: vx={vx}, vy={vy}, vz={vz}, wz={wz}", 1)
+            return True
+        
+        if kind == "stop":
             self.reset()
-            log("[DRONE] stop: cleared base cmd + goals")
-
-        else:
-            return False
-
-        return True
-
-    def update(self, dt: float):
-        """
-        Compute base_cmd for this step
-        Priority:
-          1) goals (move/rotate) if active
-          2) manual cmd_vel if non-zero
-        """
-        dt = float(dt)
-
-        # --- Goal mode ---
-        if self._move_active or self._rot_active:
-            vx = 0.0
-            wz = 0.0
-
-            # Move
-            if self._move_active:
-                if abs(self._move_remaining) > 1e-4:
-                    direction = 1.0 if self._move_remaining > 0 else -1.0
-                    vx = self._move_speed * direction
-
-                    next_remaining = self._move_remaining - (vx * dt)
-                    # if we crossed 0, clamp & stop
-                    if (self._move_remaining > 0 and next_remaining <= 0) or (self._move_remaining < 0 and next_remaining >= 0):
-                        self._move_remaining = 0.0
-                        self._move_active = False
-                        vx = 0.0
-                    else:
-                        self._move_remaining = next_remaining
-                else:
-                    self._move_remaining = 0.0
-                    self._move_active = False
-
-            # Rotate
-            if self._rot_active and self._rot_target_yaw is not None:
-                _, _, _, cur_yaw = _get_world_pose_xy_yaw(self._drone_body_path)
-                err = _wrap_pi(self._rot_target_yaw - cur_yaw)
-
-                if abs(err) < self._rot_tol:
-                    self._rot_active = False
-                    self._rot_target_yaw = None
-                    wz = 0.0
-                else:
-                    wz = max(-self._rot_max_wz, min(self._rot_max_wz, self._rot_kp * err))
-
-            # If everything finished, zero output
-            if (not self._move_active) and (not self._rot_active):
-                self.base_cmd[:] = [0.0, 0.0, 0.0]
-            else:
-                self.base_cmd[:] = [vx, 0.0, wz]
-
-            return self.base_cmd
-
-        # --- Manual cmd_vel mode ---
-        if np.linalg.norm(self._manual_cmd) > 1e-9:
-            self.base_cmd[:] = self._manual_cmd
-            return self.base_cmd
+            log("[DRONE] stop", 1)
+            return True
+        
+        return False
 
 
 class DroneRuntime:
     """
-    Single object the Extension talks to
-      - Reads cmd_vel = (vx, vy, vz, wz) from queue
-      - Applies velocity to the Crazyflie root
+    Object that extension calls every physics step
+        - Drains queued commands into the motion controller
+        - Updates sensors
+        - Applies velocities to drone rigidbody
     """
 
     def __init__(
         self,
         cmd_q: "queue.Queue",
         drone_path: str,
+        drone_body_path: str,
         cam_path: str,
-        imu_path: str,
+        imu_path: str | None,
         cam_res=(640, 480),
         sensor_hz: float = 5.0,
     ):
         self.cmd_q = cmd_q
         self._drone_path = drone_path
+        self._drone_body_path = drone_body_path
+        self._reset_needed = False
 
-        # Current command: vx, vy, vz, wz
-        self._cmd = np.zeros(4, dtype=np.float32)
-
-        # Sensors
+        self.motion = DroneMotionController()
         self.sensing = SensorSuite(
             cam_path=cam_path,
             imu_path=imu_path,
@@ -197,55 +105,146 @@ class DroneRuntime:
             sensor_hz=sensor_hz,
         )
 
-        self._reset_needed = False
-
-    # ----- API hooks -----
+    # ---------- API hooks ----------
     def get_sensors(self):
         return self.sensing.get_sensors()
 
-    # ----- Wiring -----
-    def attach_drone(self, drone):
-        self.drone = drone
+    # ---------- Wiring ----------
+    def attach_drone(self):
+        """ Connects sensors to prism """
         self.sensing.attach()
-        log("[DRONE] runtime attached (drone + sensors)")
 
     def request_reset(self):
+        """ Next setp will reset step """
         self._reset_needed = True
-
-    def step(self, dt: float):
+  
+    def _ensure_handles(self):
         """
-        Called from the PhysX step callback.
+        Ensures we have valid body and dc
+        Inits:
+            - dc: Dynamic Control interface
+            - body: rigid body handle for the drone prim path
         """
-        # Drain commands
-        self._drain_cmd_queue()
+        if hasattr(self, "_dc") is False:
+            self._dc = _dynamic_control.acquire_dynamic_control_interface()     # Dynamic Control interface
+            self._body = 0
+            self._z_hold = None                                                 # Hover altitude
 
-        if self.drone is None:
-            return
+        if self._body != 0:
+            return True
 
-        # Reset requested (timeline stop -> play)
-        if self._reset_needed:
-            self._reset_needed = False
-            self.motion.reset()
-            return
+        self._body = self._dc.get_rigid_body(self._drone_body_path)
+        if self._body == 0:
+            log(f"[DRONE] Could not get rigid body at {self._drone_body_path}", 3)
+            return False
+        
+        # Zero out all current linear/angular velocity
+        self._dc.set_rigid_body_linear_velocity(self._body, carb.Float3(0.0, 0.0, 0.0))
+        self._dc.set_rigid_body_angular_velocity(self._body, carb.Float3(0.0, 0.0, 0.0))
 
-        # Update sensing
-        self.sensing.update()
+        ##################################################################################### DEBUG PRINT
+        log(f"[DRONE] Using rigid body handle {self._body} for {self._drone_body_path}", -1) 
+        #####################################################################################
+        return True
 
-        # Update locomotion + forward policy
-        base_cmd = self.motion.update(dt)
-        try:
-            # TODO: Move the drone
-        except Exception as e:
-            log(f"[DRONE] __move the drone ig__ failed: {e}")
-
+    # ---------- Physics Loop ----------
     def _drain_cmd_queue(self):
+        """ Empties queue and applies commands in order """
         while True:
             try:
                 cmd = self.cmd_q.get_nowait()
             except queue.Empty:
                 break
 
-            # Route locomotion commands to motion controller
             handled = self.motion.handle_cmd(cmd)
             if not handled:
-                log(f"[DRONE] unknown cmd: {cmd}")
+                log(f"[DRONE] unknown cmd: {cmd}", 3)
+
+    def step(self):
+        """ Physics tick called from the PhysX step callback """
+        self._drain_cmd_queue()
+        self.sensing.update()
+        
+        # Handle timeline resets
+        if self._reset_needed:
+            self._reset_needed = False
+            self.motion.reset()
+            if hasattr(self, "_z_hold"):
+                self._z_hold = None
+            return
+
+        if not self._ensure_handles():
+            return
+
+        # --- Control gains and clamps ---
+        g = 9.81                # Gravity
+        kp_z = 8.0              # Position error (corrects altitude error)
+        kd_z = 4.0              # Damping on vertical vel (so no oscillation)
+
+        kp_vxy = 2.0            # velocity tracking gain
+        max_xy_accel = 2.0          # clamp on lateral acceleration
+
+        #---- Read current state ---
+        pose = self._dc.get_rigid_body_pose(self._body)                 # world position
+        v = self._dc.get_rigid_body_linear_velocity(self._body)         # world linear vel 
+        w = self._dc.get_rigid_body_angular_velocity(self._body)        # world angular vel
+
+        z = float(pose.p.z)         # Hover altitude anchor
+        vz = float(v.z)
+
+        # Hold altitude
+        if self._z_hold is None:
+            self._z_hold = z
+
+        # cmd from API 
+        vx_b, vy_b, vz_cmd, wz_cmd = [float(x) for x in self.motion.update()]
+
+        # orientation from PhysX pose
+        roll, pitch, yaw = _quat_to_rpy(pose.r)
+
+        # body -> world velocity transform using yaw
+        cos_yaw, sin_yaw = math.cos(yaw), math.sin(yaw)
+        vx_w = cos_yaw * vx_b - sin_yaw * vy_b
+        vy_w = sin_yaw * vx_b + cos_yaw * vy_b
+
+        # --- Leveling roll/pitch ---
+        level_gain_rp = 4.0
+        max_roll_pitch_rate = 2.0
+        roll_rate_cmd = max(-max_roll_pitch_rate, min(max_roll_pitch_rate, -level_gain_rp * roll))
+        pitch_rate_cmd = max(-max_roll_pitch_rate, min(max_roll_pitch_rate, -level_gain_rp * pitch))
+
+        self._dc.set_rigid_body_angular_velocity(
+            self._body,
+            carb.Float3(roll_rate_cmd, pitch_rate_cmd, float(wz_cmd))
+        )
+
+        # --- Vertical force ---
+        az = kp_z * (self._z_hold - z) + kd_z * (0.0 - vz) + (2.0 * vz_cmd)
+
+        # --- Lateral force ---
+        ax = kp_vxy * (vx_w - float(v.x))
+        ay = kp_vxy * (vy_w - float(v.y))
+
+        # clamp
+        ax = max(-max_xy_accel, min(max_xy_accel, ax))
+        ay = max(-max_xy_accel, min(max_xy_accel, ay))
+
+        m = 0.03
+        try:
+            props = self._dc.get_rigid_body_properties(self._body)
+            if hasattr(props, "mass") and props.mass > 0:
+                m = float(props.mass)
+        except Exception:
+            pass
+
+        # Total force
+        Fx = m * ax
+        Fy = m * ay
+        Fz = max(0.0, m * (g + az))
+
+        self._dc.apply_body_force(
+            self._body,
+            carb.Float3(Fx, Fy, Fz),
+            carb.Float3(float(pose.p.x), float(pose.p.y), float(pose.p.z)),
+            True # False = body frame, True = world frame
+        )
