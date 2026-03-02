@@ -151,7 +151,7 @@ class Extension(omni.ext.IExt):
         drone_prim = stage.GetPrimAtPath(DRONE_PATH)
         if drone_prim and drone_prim.IsValid():
             UsdGeom.XformCommonAPI(drone_prim).SetTranslate(Gf.Vec3d(0.5, -6.0, 3.5))
-            UsdGeom.XformCommonAPI(drone_prim).SetRotate(Gf.Vec3f(0.0, 0.0, 0.0))  # level
+            UsdGeom.XformCommonAPI(drone_prim).SetRotate(Gf.Vec3f(0.0, 0.0, 90.0))  # level
         else:
             log(f"DRONE BODY prim missing at {DRONE_BODY_PATH}", 3)
 

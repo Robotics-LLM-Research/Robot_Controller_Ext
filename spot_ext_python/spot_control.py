@@ -278,11 +278,6 @@ class SpotRuntime:
         base_cmd = np.array(base_cmd, dtype=np.float32, copy=True)
         base_cmd[2] *= -1.0 # Fix wz sign
 
-        ################################################################################# DEBUG
-        _, _, _, yaw = _get_world_pose_xy_yaw("/World/Spot/body")
-        log(f"[SPOTDBG] yaw={yaw:.3f} cmd={base_cmd.tolist()}", 2)
-        #################################################################################
-
         try:
             self.spot.forward(float(dt), base_cmd)
         except Exception as e:

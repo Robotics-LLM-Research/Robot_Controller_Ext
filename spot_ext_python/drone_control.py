@@ -12,11 +12,17 @@ from .sensing import SensorSuite
 
 
 
-# --- Camera Look limits ---
+# --- Camera Look ---
+# Limits
 LOOK_MAX_LEFT_DEG  = 70.0
 LOOK_MAX_RIGHT_DEG = 70.0
 LOOK_MAX_UP_DEG    = 45.0
 LOOK_MAX_DOWN_DEG  = 45.0
+
+# Neutral Trims
+LOOK_TRIM_PITCH_DEG = 0.0
+LOOK_TRIM_YAW_DEG   = 0.0
+LOOK_TRIM_ROLL_DEG  = 0.0
 
 # ---- Utils ----
 def _quat_to_rpy(q) -> tuple[float, float, float]:
@@ -65,7 +71,6 @@ class DroneLookController:
         self._yaw_deg = 0.0    # + right, - left
         self._pitch_deg = 0.0  # + up, - down
 
-        self._base_rot_xyz = (0.0, 0.0, 0.0)
         self._need_update = False
         self._prim = None
         self._xf = None
@@ -75,11 +80,12 @@ class DroneLookController:
         self._yaw_deg = 0.0
         self._pitch_deg = 0.0
         self._need_update = True
-
+    
     def attach(self) -> bool:
-        """ Find camera prim and attach its rotation as 'base' """
+        """ Find camera prim and bind to the existing Rotate:look op """
         stage = omni.usd.get_context().get_stage()
         prim = stage.GetPrimAtPath(self._cam_path)
+
         if prim is None or not prim.IsValid():
             log(f"[DRONE] Camera prim missing at {self._cam_path}", 3)
             self._prim = None
@@ -90,24 +96,50 @@ class DroneLookController:
         self._prim = prim
         self._xf = UsdGeom.Xformable(prim)
 
-        # Find or create RotateXYZ
-        self._rot_op = None
-        for op in self._xf.GetOrderedXformOps():
-            if op.GetOpType() == UsdGeom.XformOp.TypeRotateXYZ and op.GetOpName() == "xformOp:rotateXYZ:look":
-                self._rot_op = op
-                break
+        order_attr = prim.GetAttribute("xformOpOrder")
+        order = list(order_attr.Get()) if order_attr and order_attr.IsValid() else []
 
-        if self._rot_op is None:
+        # Remove scale op
+        scale_attr = prim.GetAttribute("xformOp:scale")
+        if scale_attr and scale_attr.IsValid():
+            s = scale_attr.Get()
+            if abs(float(s[0]) - 1.0) < 1e-6 and abs(float(s[1]) - 1.0) < 1e-6 and abs(float(s[2]) - 1.0) < 1e-6:
+                if "xformOp:scale" in order:
+                    order = [t for t in order if t != "xformOp:scale"]
+                    order_attr.Set(order)
+
+        # Bind/create lookTrim (constant neutral)
+        trim_attr = prim.GetAttribute("xformOp:rotateXYZ:lookTrim")
+        if trim_attr and trim_attr.IsValid():
+            self._trim_op = UsdGeom.XformOp(trim_attr)
+        else:
+            self._trim_op = self._xf.AddRotateXYZOp(opSuffix="lookTrim")
+            trim_attr = self._trim_op.GetAttr()
+
+        # Set trim ONCE (constant)
+        trim_attr.Set(Gf.Vec3f(
+            float(LOOK_TRIM_PITCH_DEG),
+            float(LOOK_TRIM_YAW_DEG),
+            float(LOOK_TRIM_ROLL_DEG),
+        ))
+
+        # Bind/create look (user-controlled offsets)
+        look_attr = prim.GetAttribute("xformOp:rotateXYZ:look")
+        if look_attr and look_attr.IsValid():
+            self._rot_op = UsdGeom.XformOp(look_attr)
+        else:
             self._rot_op = self._xf.AddRotateXYZOp(opSuffix="look")
+            look_attr = self._rot_op.GetAttr()
 
-        # Base rotation 
-        try:
-            v = self._rot_op.Get()
-            self._base_rot_xyz = (float(v[0]), float(v[1]), float(v[2]))
-        except Exception:
-            self._base_rot_xyz = (0.0, 0.0, 0.0)
+        # Ensure both ops are in xformOpOrder 
+        for name in ("xformOp:rotateXYZ:lookTrim", "xformOp:rotateXYZ:look"):
+            if name not in order:
+                order.append(name)
+        order_attr.Set(order)
 
-        self._need_update = True
+        look_attr.Set(Gf.Vec3f(0.0, 0.0, 0.0))
+
+        self._need_update = False
         return True
 
     def handle_look(self, x: float, y: float):
@@ -133,34 +165,30 @@ class DroneLookController:
     def apply_if_need_update(self):
         if not self._need_update:
             return
+        
+        if self._prim is None or (hasattr(self._prim, "IsValid") and not self._prim.IsValid()):
+            if not self.attach():
+                return
+            
         if self._rot_op is None:
-            return
-
-        bx, by, bz = self._base_rot_xyz
+            if not self.attach():
+                return
 
         # Yaw = X, Pitch = Y
         rot = Gf.Vec3f(
-            float(bx + self._pitch_deg),   # pitch up/down
-            float(by + self._yaw_deg),     # yaw left/right
-            float(bz),                     # roll fixed
+            float(self._pitch_deg),  # pitch on X
+            float(self._yaw_deg),    # yaw on Y
+            0.0
         )
-        self._rot_op.Set(rot)
-        self._need_update = False
 
-    def _read_local_rotate_xyz(self, prim) -> tuple[float, float, float]:
-        """
-        Find an authored RotateXYZ op and read it
-        If none exists, assume (0,0,0)
-        """
         try:
-            xf = UsdGeom.Xformable(prim)
-            for op in xf.GetOrderedXformOps():
-                if op.GetOpType() == UsdGeom.XformOp.TypeRotateXYZ:
-                    v = op.Get()
-                    return (float(v[0]), float(v[1]), float(v[2]))
-        except Exception:
-            pass
-        return (0.0, 0.0, 0.0)
+            self._rot_op.Set(rot)
+            self._need_update = False
+        except Exception as e:
+            log(f"[DRONE] look apply failed: {e} (will reattach)", 3)
+            self._prim = None
+            self._xf = None
+            self._rot_op = None
 
 
 class DroneMotionController:
