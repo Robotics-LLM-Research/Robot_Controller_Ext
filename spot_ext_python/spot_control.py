@@ -49,9 +49,9 @@ class MotionController:
         self._rot_tol = math.radians(2.0)
 
         # Drift-cancel / heading hold when fully idle
-        self._hold_heading = False
+        self._hold_heading = True
         self._hold_yaw = None
-        self._hold_kp = 1.0
+        self._hold_kp = 0.5
         self._hold_max_wz = 0.2
 
     def reset(self):
@@ -71,6 +71,7 @@ class MotionController:
             _, vx, vy, wz = cmd
 
             # Manual command overrides goals
+            self._hold_yaw = None
             self._move_active = False
             self._rot_active = False
             self._move_remaining = 0.0
@@ -80,6 +81,8 @@ class MotionController:
             log(f"[SPOT] cmd_vel set: vx={vx}, vy={vy}, wz={wz}", 1)
 
         elif kind == "move":
+            self._hold_yaw = None
+
             meters = float(cmd[1])
             self._manual_cmd[:] = [0.0, 0.0, 0.0]
             self._move_remaining += meters
@@ -87,6 +90,8 @@ class MotionController:
             log(f"[SPOT] move queued: {meters} m (remaining={self._move_remaining} m)", 1)
 
         elif kind == "rotate":
+            self._hold_yaw = None
+
             deg = float(cmd[1])
             self._manual_cmd[:] = [0.0, 0.0, 0.0]
             delta = math.radians(deg)
@@ -115,6 +120,7 @@ class MotionController:
 
         # --- Goal mode ---
         if self._move_active or self._rot_active:
+            self._hold_yaw = None
             vx = 0.0
             wz = 0.0
 
@@ -268,6 +274,15 @@ class SpotRuntime:
 
         # Update locomotion + forward policy
         base_cmd = self.motion.update(dt)
+
+        base_cmd = np.array(base_cmd, dtype=np.float32, copy=True)
+        base_cmd[2] *= -1.0 # Fix wz sign
+
+        ################################################################################# DEBUG
+        _, _, _, yaw = _get_world_pose_xy_yaw("/World/Spot/body")
+        log(f"[SPOTDBG] yaw={yaw:.3f} cmd={base_cmd.tolist()}", 2)
+        #################################################################################
+
         try:
             self.spot.forward(float(dt), base_cmd)
         except Exception as e:
