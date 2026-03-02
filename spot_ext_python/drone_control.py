@@ -3,6 +3,8 @@ import queue
 import numpy as np
 
 import carb
+import omni.usd
+from pxr import UsdGeom, Gf
 from omni.isaac.dynamic_control import _dynamic_control
 
 from .utils import log, _wrap_pi
@@ -10,7 +12,13 @@ from .sensing import SensorSuite
 
 
 
-# ----- Utils -----
+# --- Camera Look limits ---
+LOOK_MAX_LEFT_DEG  = 70.0
+LOOK_MAX_RIGHT_DEG = 70.0
+LOOK_MAX_UP_DEG    = 45.0
+LOOK_MAX_DOWN_DEG  = 45.0
+
+# ---- Utils ----
 def _quat_to_rpy(q) -> tuple[float, float, float]:
     """ Convert a quaternion (x,y,z,w) into roll/pitch/yaw in radians """
     x = float(q.x)
@@ -30,6 +38,129 @@ def _quat_to_rpy(q) -> tuple[float, float, float]:
     pitch = math.atan2(-r20, math.sqrt(r21 * r21 + r22 * r22))
     roll = math.atan2(r21, r22)
     return roll, pitch, yaw
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    """ Forces v to stay within [lo, hi] """
+    return max(lo, min(hi, v))
+
+
+class DroneLookController:
+    """ Receives normalized (x,y) in [-1,1] and maps to yaw/pitch within limits """
+    def __init__(
+        self,
+        cam_path: str,
+        max_left_deg: float = LOOK_MAX_LEFT_DEG,
+        max_right_deg: float = LOOK_MAX_RIGHT_DEG,
+        max_up_deg: float = LOOK_MAX_UP_DEG,
+        max_down_deg: float = LOOK_MAX_DOWN_DEG,
+    ):
+        self._cam_path = cam_path
+
+        self._max_left = abs(float(max_left_deg))
+        self._max_right = abs(float(max_right_deg))
+        self._max_up = abs(float(max_up_deg))
+        self._max_down = abs(float(max_down_deg))
+
+        # Current offsets
+        self._yaw_deg = 0.0    # + right, - left
+        self._pitch_deg = 0.0  # + up, - down
+
+        self._base_rot_xyz = (0.0, 0.0, 0.0)
+        self._need_update = False
+        self._prim = None
+        self._xf = None
+        self._rot_op = None
+
+    def reset(self):
+        self._yaw_deg = 0.0
+        self._pitch_deg = 0.0
+        self._need_update = True
+
+    def attach(self) -> bool:
+        """ Find camera prim and attach its rotation as 'base' """
+        stage = omni.usd.get_context().get_stage()
+        prim = stage.GetPrimAtPath(self._cam_path)
+        if prim is None or not prim.IsValid():
+            log(f"[DRONE] Camera prim missing at {self._cam_path}", 3)
+            self._prim = None
+            self._xf = None
+            self._rot_op = None
+            return False
+
+        self._prim = prim
+        self._xf = UsdGeom.Xformable(prim)
+
+        # Find or create RotateXYZ
+        self._rot_op = None
+        for op in self._xf.GetOrderedXformOps():
+            if op.GetOpType() == UsdGeom.XformOp.TypeRotateXYZ and op.GetOpName() == "xformOp:rotateXYZ:look":
+                self._rot_op = op
+                break
+
+        if self._rot_op is None:
+            self._rot_op = self._xf.AddRotateXYZOp(opSuffix="look")
+
+        # Base rotation 
+        try:
+            v = self._rot_op.Get()
+            self._base_rot_xyz = (float(v[0]), float(v[1]), float(v[2]))
+        except Exception:
+            self._base_rot_xyz = (0.0, 0.0, 0.0)
+
+        self._need_update = True
+        return True
+
+    def handle_look(self, x: float, y: float):
+        """
+        x,y: normalized [-1,1]
+          x: -1 left, +1 right
+          y: -1 down, +1 up
+        """
+        x = _clamp(float(x), -1.0, 1.0)
+        y = _clamp(float(y), -1.0, 1.0)
+
+        # Map normalized to degrees with limits
+        yaw = (x * self._max_right) if x >= 0.0 else (x * self._max_left)
+        pitch = (y * self._max_up) if y >= 0.0 else (y * self._max_down)
+
+        # Clamp again
+        self._yaw_deg = _clamp(yaw, -self._max_left, self._max_right)
+        self._pitch_deg = _clamp(pitch, -self._max_down, self._max_up)
+
+        self._need_update = True
+        log(f"[DRONE] look set: x={x:.2f}, y={y:.2f} -> yaw={self._yaw_deg:.1f}°, pitch={self._pitch_deg:.1f}°", 2)
+
+    def apply_if_need_update(self):
+        if not self._need_update:
+            return
+        if self._rot_op is None:
+            return
+
+        bx, by, bz = self._base_rot_xyz
+
+        # Yaw = X, Pitch = Y
+        rot = Gf.Vec3f(
+            float(bx + self._pitch_deg),   # pitch up/down
+            float(by + self._yaw_deg),     # yaw left/right
+            float(bz),                     # roll fixed
+        )
+        self._rot_op.Set(rot)
+        self._need_update = False
+
+    def _read_local_rotate_xyz(self, prim) -> tuple[float, float, float]:
+        """
+        Find an authored RotateXYZ op and read it
+        If none exists, assume (0,0,0)
+        """
+        try:
+            xf = UsdGeom.Xformable(prim)
+            for op in xf.GetOrderedXformOps():
+                if op.GetOpType() == UsdGeom.XformOp.TypeRotateXYZ:
+                    v = op.Get()
+                    return (float(v[0]), float(v[1]), float(v[2]))
+        except Exception:
+            pass
+        return (0.0, 0.0, 0.0)
 
 
 class DroneMotionController:
@@ -92,7 +223,7 @@ class DroneMotionController:
             self._manual_cmd[:] = [float(vx), float(vy), float(vz), float(wz)]
             log(f"[DRONE] cmd_vel set: vx={vx}, vy={vy}, vz={vz}, wz={wz}", 2)
         
-        elif kind in ("move_fwd"):
+        elif kind == "move_fwd":
             meters = float(cmd[1])
             self._manual_cmd[:] = 0.0
             self._fwd_remaining += meters
@@ -245,6 +376,7 @@ class DroneRuntime:
             cam_res=cam_res,
             sensor_hz=sensor_hz,
         )
+        self.look = DroneLookController(cam_path=cam_path)
 
     # ---------- API hooks ----------
     def get_sensors(self):
@@ -254,6 +386,8 @@ class DroneRuntime:
     def attach_drone(self):
         """ Connects sensors to prism """
         self.sensing.attach()
+        self.look.attach()
+        self.look.apply_if_need_update()
 
     def request_reset(self):
         """ Next setp will reset step """
@@ -293,6 +427,13 @@ class DroneRuntime:
             except queue.Empty:
                 break
 
+            kind = cmd[0]
+
+            if kind == "look":
+                _, x, y = cmd
+                self.look.handle_look(x, y)
+                continue
+
             handled = self.motion.handle_cmd(cmd)
             if not handled:
                 log(f"[DRONE] unknown cmd: {cmd}", 3)
@@ -302,6 +443,7 @@ class DroneRuntime:
         dt = float(dt)
         self._drain_cmd_queue()
         self.sensing.update()
+        self.look.apply_if_need_update()
         
         # Handle timeline resets
         if self._reset_needed:
@@ -309,6 +451,10 @@ class DroneRuntime:
             self.motion.reset()
             if hasattr(self, "_z_hold"):
                 self._z_hold = None
+
+            # Reset camera to look center
+            self.look.reset()
+            self.look.apply_if_need_update()
             return
 
         if not self._ensure_handles():
@@ -320,7 +466,7 @@ class DroneRuntime:
         kd_z = 4.0              # Damping on vertical vel (so no oscillation)
 
         kp_vxy = 2.0            # velocity tracking gain
-        max_xy_accel = 2.0          # clamp on lateral acceleration
+        max_xy_accel = 2.0      # clamp on lateral acceleration
 
         #---- Read current state ---
         pose = self._dc.get_rigid_body_pose(self._body)                 # world position
