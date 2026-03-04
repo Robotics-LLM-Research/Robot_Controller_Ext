@@ -1,43 +1,31 @@
-# Loading Extension
-To enable this extension, run Isaac Sim with the flags --ext-folder {path_to_ext_folder} --enable {ext_directory_name}
-The user will see the extension appear on the toolbar on startup with the title they specified in the Extension Generator.
+# spot_ext_python — Developer Guide
 
-This extension may also be enabled through the Extension Manager by providing its local path and searching for it in
-"Third Party Extensions"
+This README is for **developers** who want to understand or modify the extension code. For setup and API usage, see the root [README.md](../../README.md) and [docs/README.md](../docs/README.md).
 
+## Module Overview
 
-# Extension Usage
-This template extension creates a Load, Reset, and Run button in a simple UI.
-The Load and Reset buttons interact with the isaacsim.core.api World() in order
-to simplify user interaction with the simulator and provide certain gurantees to the user
-at the times their callback functions are called.  
+This Python module is loaded by Isaac Sim when the extension is enabled. It spawns Spot and Crazyflie, starts HTTP APIs, and drives both robots each physics step.
 
-The Run button runs an analogue of a script, which allows the user to run long-lasting
-code that takes more than one frame to complete such as moving a robot to a target.
-This approach is limited to code that is able to throw a yield() on every frame.
+## File Roles
 
+| File | Purpose |
+|------|---------|
+| `extension.py` | Extension entry point. `on_startup` creates runtimes and API servers; subscribes to timeline and PhysX step events. Spawns Spot via `SpotFlatTerrainPolicy`, positions drone, attaches runtimes on first Play. |
+| `api_server.py` | FastAPI apps for Spot (8001) and Drone (8002). Endpoints enqueue commands; `get_sensors` callback returns camera/IMU data. Runs in daemon threads. |
+| `spot_control.py` | `SpotRuntime` and `MotionController`. Interprets queued commands (cmd_vel, move, rotate, stop), applies Spot policy actions, reads sensors. |
+| `drone_control.py` | `DroneRuntime` for Crazyflie. Handles 3D velocity, move/rotate/altitude, camera look. Drives drone via PhysX. |
+| `sensing.py` | `SensorSuite` — captures camera frames and IMU data from USD prims. |
+| `utils.py` | `log()` and helpers (e.g. angle wrapping). |
+| `global_variables.py` | Extension metadata (title, description) from config. |
 
-# Template Code Overview
-The template is well documented and is meant to be self-explanatory to the user should they
-start reading the provided python files.  A short overview is also provided here:
+## Data Flow
 
-global_variables.py: 
-    A script that stores in global variables that the user specified when creating this extension such as the Title and Description.
+1. **Startup**: Extension starts Spot and Drone API servers; runtimes are created but not yet attached.
+2. **First Play**: PhysX ready → spawn Spot, position drone → attach runtimes → subscribe to physics step.
+3. **Each physics step**: `_on_world_physics_step` → `spot_runtime.step()` and `drone_runtime.step()`.
+4. **HTTP requests**: API endpoints put commands into queues; runtimes consume them in `step()`.
 
-extension.py:
-    A class containing the standard boilerplate necessary to have the user extension show up on the Toolbar.  This
-    class is meant to fulfill most ues-cases without modification.
-    In extension.py, useful standard callback functions are created that the user may complete in ui_builder.py.
+## Extending
 
-ui_builder.py:
-    This file is nearly identical to the ui_builder.py found in the Loaded Scenario template, but the example code in that template is much simpler.
-    If your goal is to understand and program a UI that connects to the core.World, you may find it a useful reference.
-
-    This file takes care of building the UI and programming the UI buttons. Here, the user can see useful callback functions that have been
-    set up for them, and they may also create UI buttons that are hooked up to more user-defined callback functions.  This file is
-    thoroughly documented, and the user should read through it before making serious modification.
-
-scenario.py:
-    This file handles the logical flow of this template, including implementing a script to pick up and move a block around obstacles.
-    This file demonstrates how to write scripted behavior through the Extension Workflow with minimal overhead or setup.  This is also thoroughly
-    documented, and it will be the most interesting read in this template.
+- **New endpoints**: Add routes in `api_server.py` and corresponding command handling in `spot_control.py` or `drone_control.py`.
+- **New sensors**: Extend `SensorSuite` in `sensing.py` and wire `get_sensors` in the API.
