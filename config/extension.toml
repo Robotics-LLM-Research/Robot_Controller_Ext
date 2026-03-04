@@ -17,3 +17,4 @@ writeTarget.kit = true
 
 [[python.module]]
 name = "spot_ext_python"
+path = ".."
