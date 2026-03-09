@@ -179,6 +179,25 @@ class MotionController:
 
         self.base_cmd[:] = [0.0, 0.0, 0.0]
         return self.base_cmd
+    
+    # ---------- Var Expose ----------
+    def has_active_goal(self) -> bool:
+        return self._move_active or self._rot_active
+
+    def has_manual_cmd(self) -> bool:
+        return bool(np.linalg.norm(self._manual_cmd) > 1e-9)
+
+    def active_goal_name(self):
+        parts = []
+
+        if self._move_active:
+            parts.append("move")
+        if self._rot_active:
+            parts.append("rotate")
+        if self.has_manual_cmd():
+            parts.append("cmd_vel")
+
+        return "+".join(parts) if parts else None
 
 
 class SpotRuntime:
@@ -212,8 +231,17 @@ class SpotRuntime:
             cam_res=cam_res,
             sensor_hz=sensor_hz,
         )
+        self.status = {
+            "busy": False,
+            "done": True,
+            "queued_count": 0,
+            "active_goal": None,
+        }
 
     # ---------- API hooks ----------
+    def get_status(self):
+        return self.status
+
     def get_sensors(self):
         return self.sensing.get_sensors()
 
@@ -228,6 +256,20 @@ class SpotRuntime:
         self._reset_needed = True
 
     # ---------- Physics Loop ----------
+    def _refresh_status(self):
+        queued_count = int(self.cmd_q.qsize())
+        goal_active = bool(self.motion.has_active_goal())
+        manual_active = bool(self.motion.has_manual_cmd())
+
+        busy = (queued_count > 0) or goal_active or manual_active
+
+        self.status = {
+            "busy": busy,
+            "done": not busy,
+            "queued_count": queued_count,
+            "active_goal": self.motion.active_goal_name(),
+        }
+
     def _drain_cmd_queue(self):
         """ Empties queue and applies commands in order """
         while True:
@@ -247,6 +289,7 @@ class SpotRuntime:
         self.sensing.update()
 
         if self.spot is None:
+            self._refresh_status()
             return
 
         # Handle timeline resets
@@ -255,6 +298,7 @@ class SpotRuntime:
             self.motion.reset()
             self._policy_inited = False
             self._warmup_left = 60
+            self._refresh_status()
             return
 
         # Initialize policy once
@@ -265,16 +309,17 @@ class SpotRuntime:
                 self._warmup_left = 60
             except Exception as e:
                 log(f"[SPOT] spot.initialize not ready yet: {e}", 3)
+            self._refresh_status()
             return
 
         # Warmup delay before commanding motion
         if self._warmup_left > 0:
             self._warmup_left -= 1
+            self._refresh_status()
             return
 
         # Update locomotion + forward policy
         base_cmd = self.motion.update(dt)
-
         base_cmd = np.array(base_cmd, dtype=np.float32, copy=True)
         base_cmd[2] *= -1.0 # Fix wz sign
 
@@ -282,3 +327,5 @@ class SpotRuntime:
             self.spot.forward(float(dt), base_cmd)
         except Exception as e:
             log(f"[SPOT] spot.forward failed: {e}", 3)
+
+        self._refresh_status()

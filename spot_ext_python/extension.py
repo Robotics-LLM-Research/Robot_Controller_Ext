@@ -73,12 +73,14 @@ class Extension(omni.ext.IExt):
         # API servers
         self._spot_server, self._spot_api_thread = start_spot_api(
             self.spot_cmd_q, HOST, SPOT_PORT,
+            get_status=self.spot_runtime.get_status,
             get_sensors=self.spot_runtime.get_sensors
         ) 
         log(f"Spot api on http://{HOST}:{SPOT_PORT}", 2)
 
         self._drone_server, self._drone_api_thread = start_drone_api(
             self.drone_cmd_q, HOST, DRONE_PORT,
+            get_status=self.spot_runtime.get_status,
             get_sensors=self.drone_runtime.get_sensors
         ) 
         log(f"Drone api on http://{HOST}:{DRONE_PORT}", 2)

@@ -6,13 +6,19 @@ from fastapi import FastAPI
 
 
 
-def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_sensors=None):
+def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, get_sensors=None):
     app = FastAPI()
 
     # ---------- ENDPOINTS ----------
     @app.get("/ping")
     def ping():
         return {"ok": True}
+    
+    @app.get("/status")
+    def status():
+        if get_status is None:
+            return {"ok": False, "error": "status is not wired"}
+        return {"ok": True, "status": get_status()}
     
     # ----- Locomotion -----
     # --- Base ---
@@ -43,7 +49,7 @@ def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_sensors=None)
     
     @app.post("/rotate")
     def rotate(deg: float = 90.0):
-        """ Rotate counter-clockwise(+) / clockwise(-) by degrees """
+        """ Rotate clockwise(+) / counter-clockwise(-) by degrees """
         cmd_q.put(("rotate", float(deg)))
         return {"queued": True}
     
@@ -62,13 +68,19 @@ def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_sensors=None)
     return server, thread
 
 
-def start_drone_api(cmd_q: "queue.Queue", host: str, port: int, get_sensors=None):
+def start_drone_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, get_sensors=None):
     app = FastAPI()
 
     # ---------- ENDPOINTS ----------
     @app.get("/ping")
     def ping():
         return {"ok": True}
+    
+    @app.get("/status")
+    def status():
+        if get_status is None:
+            return {"ok": False, "error": "status is not wired"}
+        return {"ok": True, "status": get_status()}
     
     # ----- Locomotion -----
     # --- Base ---
