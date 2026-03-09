@@ -1,4 +1,5 @@
 import time
+import json
 from google import genai
 from google.genai import types, errors
 
@@ -40,6 +41,17 @@ def create_initial_content(user_mission):
     return [
         types.Content(role="user", parts=[types.Part(text=user_mission)])
     ]
+
+def create_sensor_content(sensors, label="Sensors"):
+    sensors_text = (
+        f"{label}:\n" + json.dumps({"latests_sensors": sensors}, indent=2)
+        + "\nUse this to deccide the next single safe action."
+    )
+
+    return types.Content(
+        role="user",
+        parts=[types.Part(text=sensors_text)]
+    ) 
 
 def append_model_response(contents, response):
     contents.append(response.candidates[0].content)

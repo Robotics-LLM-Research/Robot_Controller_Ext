@@ -23,6 +23,10 @@ def get_status(cur_robot):
     return requests.get(f"{robot_api}/status")
 
 # --- Command Handling ---
+def emergency_stop(cur_robot):
+    robot_api = map_robot_to_api(cur_robot)
+    response = requests.post(f"{robot_api}/stop", timeout=5)
+
 def execute_fc(name, args):
 
     # Spot Commands

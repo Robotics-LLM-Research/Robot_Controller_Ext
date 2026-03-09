@@ -233,7 +233,7 @@ class SpotRuntime:
         )
         self.status = {
             "busy": False,
-            "done": True,
+            "idle": True,
             "queued_count": 0,
             "active_goal": None,
         }
@@ -265,7 +265,7 @@ class SpotRuntime:
 
         self.status = {
             "busy": busy,
-            "done": not busy,
+            "idle": not busy,
             "queued_count": queued_count,
             "active_goal": self.motion.active_goal_name(),
         }

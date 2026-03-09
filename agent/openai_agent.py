@@ -1,7 +1,7 @@
 import json
 from openai import OpenAI
 
-MODEL = "gpt-5"
+MODEL = "gpt-5-mini"
 
 
 # ----- Model -----
@@ -25,6 +25,15 @@ def ask_model(client, contents, model_context):
 # ----- Content -----
 def create_initial_content(user_mission):
     return [{"role": "user", "content": user_mission}]
+
+def create_sensor_content(sensors, label="Sensors"):
+    return {
+        "role": "user",
+        "content": (
+            f"{label}:\n" + json.dumps({"latests_sensors": sensors}, indent=2)
+            + "\nUse this to deccide the next single safe action."
+        )
+    }
 
 def append_model_response(contents, response):
     contents.extend(response.output)

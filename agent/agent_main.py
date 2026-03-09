@@ -8,14 +8,16 @@ load_dotenv()
 
 import gemini_agent, openai_agent
 from tools import get_tool_declarations
-from executor import execute_fc, get_status, get_sensors
+from executor import execute_fc, get_status, get_sensors, emergency_stop
 
-MAX_STEPS = 10
+MAX_STEPS = 20
 SYSTEM_PROMPT = (
-    "You control simulated robots through function calls only ."
+    "You control simulated robots through function calls only. "
     "Use the latest sensor readings. "
     "Choose one safe action at a time. "
-    "If the mission is complete, do not call a function and instead respond with a short completion message."
+    "The status field idle=True only means the previous action finished; it does NOT mean the mission is complete. "
+    "If the mission is not complete, call another function instead of asking for permission or describing the next step. "
+    "Only respond with plain text when the mission is actually complete."
 )
 
 
@@ -67,7 +69,15 @@ def wait_until_idle(timeout_s=30, poll_s=0.2):
         
         time.sleep(poll_s)
 
-    raise TimeoutError("Robot did not finish in time")
+    # Perform emergency stop
+    result = emergency_stop("Spot").json()
+    print("Performed Emergency Stop.")
+    if not result.get("ok", False):
+            raise RuntimeError(payload)
+    
+    status = get_status("Spot").json()
+    if status["status"]["busy"]:
+            raise TimeoutError("Robot did not finish in time")
 
 def select_agent(name):
     if name == "OpenAI":
@@ -80,6 +90,10 @@ def select_agent(name):
 def run_agent_loop(agent: ModuleType, client, model_context, user_mission):
     state = initialize_state(user_mission)
     contents = agent.create_initial_content(user_mission)
+
+    # Give initial sensors
+    sensors = get_sensors("Spot").json()
+    contents.append(agent.create_sensor_content(sensors, label="Initial Sensors"))
 
     while state["step_count"] < MAX_STEPS:
         print_state(state)
