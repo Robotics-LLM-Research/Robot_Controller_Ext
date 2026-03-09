@@ -23,31 +23,35 @@ def get_status(cur_robot):
     return requests.get(f"{robot_api}/status")
 
 # --- Command Handling ---
-def execute_fc(fc):
-    name = fc.name
-    args = fc.args
+def execute_fc(name, args):
 
     # Spot Commands
     if name == "move_spot":
-        return requests.post(f"{SPOT_API}/move", params={"meters": float(args["meters"])}, timeout=5)
+        response = requests.post(f"{SPOT_API}/move", params={"meters": float(args["meters"])}, timeout=5)
     
-    if name == "rotate_spot":
-        return requests.post(f"{SPOT_API}/rotate", params={"deg": float(args["degrees"])}, timeout=5)
+    elif name == "rotate_spot":
+        response = requests.post(f"{SPOT_API}/rotate", params={"deg": float(args["degrees"])}, timeout=5)
 
     # Drone Commands
-    if name == "move_forward_drone":
-        return requests.post(f"{DRONE_API}/move_fwd", params={"meters": float(args["meters"])}, timeout=5)
+    elif name == "move_forward_drone":
+        response = requests.post(f"{DRONE_API}/move_fwd", params={"meters": float(args["meters"])}, timeout=5)
     
-    if name == "move_lateral_drone":
-        return requests.post(f"{DRONE_API}/move_lat", params={"meters": float(args["meters"])}, timeout=5)
+    elif name == "move_lateral_drone":
+        response = requests.post(f"{DRONE_API}/move_lat", params={"meters": float(args["meters"])}, timeout=5)
     
-    if name == "raise_altitude_drone":
-        return requests.post(f"{DRONE_API}/raise_alt", params={"meters": float(args["meters"])}, timeout=5)
+    elif name == "raise_altitude_drone":
+        response = requests.post(f"{DRONE_API}/raise_alt", params={"meters": float(args["meters"])}, timeout=5)
     
-    if name == "rotate_drone":
-        return requests.post(f"{DRONE_API}/rotate", params={"deg": float(args["degrees"])}, timeout=5)
+    elif name == "rotate_drone":
+        response = requests.post(f"{DRONE_API}/rotate", params={"deg": float(args["degrees"])}, timeout=5)
     
-    if name == "look_drone":
-        return requests.post(f"{DRONE_API}/look", params={"x": float(args["x"]), "y": float(args["y"])}, timeout=5)
+    elif name == "look_drone":
+        response = requests.post(f"{DRONE_API}/look", params={"x": float(args["x"]), "y": float(args["y"])}, timeout=5)
 
-    raise ValueError("Unknown function: ", name) 
+    else:
+        raise ValueError("Unknown function: ", name) 
+    
+    return {
+        "status_code": response.status_code,
+        "body": response.json()
+    }

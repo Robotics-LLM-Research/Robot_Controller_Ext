@@ -2,6 +2,7 @@ def get_tool_declarations():
     return [
         # ---------- SPOT TOOLS ----------
         {
+            "type": "function",
             "name": "move_spot",
             "description": "Moves Spot forward or backward by a specified amount of meters.",
             "parameters" : {
@@ -17,6 +18,7 @@ def get_tool_declarations():
         },
 
         {
+            "type": "function",
             "name": "rotate_spot",
             "description": "Rotates Spot by a specified amount of degrees.",
             "parameters" : {
@@ -34,6 +36,7 @@ def get_tool_declarations():
         # ---------- DRONE TOOLS ----------
         # --- Motion ---
         {
+            "type": "function",
             "name": "move_forward_drone",
             "description": "Moves Drone forward or backward by a specified amount of meters.",
             "parameters" : {
@@ -49,6 +52,7 @@ def get_tool_declarations():
         }, 
         
         {
+            "type": "function",
             "name": "move_lateral_drone",
             "description": "Moves Drone left or right by a specified amount of meters.",
             "parameters" : {
@@ -64,6 +68,7 @@ def get_tool_declarations():
         },
 
         {
+            "type": "function",
             "name": "raise_altitude_drone",
             "description": "Raises or lowers the altitude of the Drone by a specified amount of meters.",
             "parameters" : {
@@ -79,6 +84,7 @@ def get_tool_declarations():
         },
 
         {
+            "type": "function",
             "name": "rotate_drone",
             "description": "Rotates Drone by a specified amount of degrees.",
             "parameters" : {
@@ -95,6 +101,7 @@ def get_tool_declarations():
 
         # --- Sensors ---
         {
+            "type": "function",
             "name": "look_drone",
             "description": "Moves the Drone's on-board camera based on polar coordinates. At (0,0) the camera is in its neutral position pointing center.",
             "parameters" : {
