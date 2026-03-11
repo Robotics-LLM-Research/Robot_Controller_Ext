@@ -231,6 +231,7 @@ class DroneMotionController:
         self._rot_target_yaw = None
         self._rot_pending_delta = 0.0
 
+        self._alt_active = False
         self._alt_target_z = None
         self._alt_pending_delta = 0.0
 
@@ -246,6 +247,7 @@ class DroneMotionController:
             self._rot_active = False
             self._rot_target_yaw = None
             self._rot_pending_delta = 0.0
+            self._alt_active = False
             self._alt_pending_delta = 0.0
 
             self._manual_cmd[:] = [float(vx), float(vy), float(vz), float(wz)]
@@ -304,12 +306,14 @@ class DroneMotionController:
         if abs(self._alt_pending_delta) > 1e-9:
             if self._alt_target_z is None:
                 self._alt_target_z = cur_z + self._alt_pending_delta
+                self._alt_active = True
             else:
                 self._alt_target_z = self._alt_target_z + self._alt_pending_delta
+                self._alt_active = True
             self._alt_pending_delta = 0.0
 
         # --- Goal mode ---
-        goal_active = self._fwd_active or self._lat_active or self._rot_active or (self._alt_target_z is not None)
+        goal_active = self._fwd_active or self._lat_active or self._rot_active or self._alt_active
         if goal_active:
             vx = 0.0
             vy = 0.0
@@ -360,6 +364,7 @@ class DroneMotionController:
             # Altitude done check
             if self._alt_target_z is not None:
                 if abs(self._alt_target_z - cur_z) < self._alt_tol:
+                    self._alt_active = False
                     pass
 
             self.base_cmd[:] = [vx, vy, 0.0, wz]
@@ -372,6 +377,29 @@ class DroneMotionController:
 
         self.base_cmd[:] = 0.0
         return self.base_cmd, None
+    
+    # ---------- Var Expose ----------
+    def has_active_goal(self) -> bool:
+        return self._fwd_active or self._lat_active or self._rot_active
+
+    def has_manual_cmd(self) -> bool:
+        return bool(np.linalg.norm(self._manual_cmd) > 1e-9)
+
+    def active_goal_name(self):
+        parts = []
+
+        if self._fwd_active:
+            parts.append("move_fwd")
+        if self._lat_active:
+            parts.append("move_lat")
+        if self._rot_active:
+            parts.append("rotate")
+        if self._alt_active:
+            parts.append("altitude")
+        if self.has_manual_cmd():
+            parts.append("cmd_vel")
+
+        return "+".join(parts) if parts else None
 
 
 class DroneRuntime:
@@ -405,8 +433,17 @@ class DroneRuntime:
             sensor_hz=sensor_hz,
         )
         self.look = DroneLookController(cam_path=cam_path)
+        self.status = {
+            "busy": False,
+            "idle": True,
+            "queued_count": 0,
+            "active_goal": None,
+        }
 
     # ---------- API hooks ----------
+    def get_status(self):
+        return self.status
+    
     def get_sensors(self):
         return self.sensing.get_sensors()
 
@@ -447,6 +484,20 @@ class DroneRuntime:
         return True
 
     # ---------- Physics Loop ----------
+    def _refresh_status(self):
+        queued_count = int(self.cmd_q.qsize())
+        goal_active = bool(self.motion.has_active_goal())
+        manual_active = bool(self.motion.has_manual_cmd())
+
+        busy = (queued_count > 0) or goal_active or manual_active
+
+        self.status = {
+            "busy": busy,
+            "idle": not busy,
+            "queued_count": queued_count,
+            "active_goal": self.motion.active_goal_name(),
+        }
+
     def _drain_cmd_queue(self):
         """ Empties queue and applies commands in order """
         while True:
@@ -483,9 +534,11 @@ class DroneRuntime:
             # Reset camera to look center
             self.look.reset()
             self.look.apply_if_need_update()
+            self._refresh_status()
             return
 
         if not self._ensure_handles():
+            self._refresh_status()
             return
 
         # --- Control gains and clamps ---
@@ -565,3 +618,5 @@ class DroneRuntime:
             carb.Float3(float(pose.p.x), float(pose.p.y), float(pose.p.z)),
             True # False = body frame, True = world frame
         )
+
+        self._refresh_status() 

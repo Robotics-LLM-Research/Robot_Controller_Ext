@@ -80,7 +80,7 @@ class Extension(omni.ext.IExt):
 
         self._drone_server, self._drone_api_thread = start_drone_api(
             self.drone_cmd_q, HOST, DRONE_PORT,
-            get_status=self.spot_runtime.get_status,
+            get_status=self.drone_runtime.get_status,
             get_sensors=self.drone_runtime.get_sensors
         ) 
         log(f"Drone api on http://{HOST}:{DRONE_PORT}", 2)

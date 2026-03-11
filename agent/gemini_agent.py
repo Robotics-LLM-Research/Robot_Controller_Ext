@@ -6,9 +6,11 @@ from google.genai import types, errors
 MODEL = "gemini-2.5-flash"
 
 
+
 # ----- Model -----
 def create_client():
     return genai.Client()
+
 
 def create_model_context(system_prompt, tools):
     gemini_tools = types.Tool(function_declarations=tools)
@@ -21,6 +23,7 @@ def create_model_context(system_prompt, tools):
     )
     return {"config": config}
 
+
 def ask_model(client, contents, model_context, retries=3):
     for attempt in range(retries):
         try:
@@ -29,12 +32,13 @@ def ask_model(client, contents, model_context, retries=3):
                 contents=contents,
                 config=model_context["config"],
             )
-        except errors.ServerError as e:
+        except errors.ServerError:
             if attempt == retries - 1:
                 raise
             wait_s = 2 ** attempt
             print(f"Gemini unavailable, retrying in {wait_s}s...")
             time.sleep(wait_s)
+
 
 # ----- Content -----
 def create_initial_content(user_mission):
@@ -42,25 +46,30 @@ def create_initial_content(user_mission):
         types.Content(role="user", parts=[types.Part(text=user_mission)])
     ]
 
-def create_sensor_content(sensors, label="Sensors"):
-    sensors_text = (
-        f"{label}:\n" + json.dumps({"latests_sensors": sensors}, indent=2)
-        + "\nUse this to deccide the next single safe action."
+
+def create_observation_content(observation, label="Observation"):
+    observation_text = (
+        f"{label}:\n"
+        + json.dumps(observation, indent=2)
+        + "\nUse this shared world state to decide the next single action."
     )
 
     return types.Content(
         role="user",
-        parts=[types.Part(text=sensors_text)]
-    ) 
+        parts=[types.Part(text=observation_text)]
+    )
+
 
 def append_model_response(contents, response):
     contents.append(response.candidates[0].content)
 
-def create_tool_result(raw_call, tool_result, status, sensors):
+
+def create_tool_results(raw_call, tool_result, acting_robot, latest_status, world_state):
     function_response = {
+        "acting_robot": acting_robot,
         "result": tool_result,
-        "latest_status": status,
-        "latest_sensors": sensors,
+        "latest_status": latest_status,
+        "world_state": world_state,
     }
 
     part = types.Part.from_function_response(
@@ -70,16 +79,19 @@ def create_tool_result(raw_call, tool_result, status, sensors):
 
     return types.Content(role="user", parts=[part])
 
+
 # ----- Conversion -----
 def extract_tool_call(response):
     if not response.function_calls:
         return None
+
     fc = response.function_calls[0]
     return {
         "name": fc.name,
         "args": dict(fc.args),
         "raw": fc,
     }
+
 
 def get_final_text(response):
     return response.text
