@@ -190,6 +190,9 @@ class DroneLookController:
             self._xf = None
             self._rot_op = None
 
+    def has_pending_update(self) -> bool:
+        return bool(self._need_update)
+
 
 class DroneMotionController:
     """ Stores the "current desired motion" and interpret commands """
@@ -488,14 +491,22 @@ class DroneRuntime:
         queued_count = int(self.cmd_q.qsize())
         goal_active = bool(self.motion.has_active_goal())
         manual_active = bool(self.motion.has_manual_cmd())
+        look_active = bool(self.look.has_pending_update())
 
-        busy = (queued_count > 0) or goal_active or manual_active
+        busy = (queued_count > 0) or goal_active or manual_active or look_active
+
+        active_parts = []
+        motion_name = self.motion.active_goal_name()
+        if motion_name:
+            active_parts.append(motion_name)
+        if look_active:
+            active_parts.append("look")
 
         self.status = {
             "busy": busy,
             "idle": not busy,
             "queued_count": queued_count,
-            "active_goal": self.motion.active_goal_name(),
+            "active_goal": "+".join(active_parts) if active_parts else None,
         }
 
     def _drain_cmd_queue(self):

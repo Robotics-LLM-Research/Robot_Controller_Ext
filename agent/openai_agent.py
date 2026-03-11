@@ -26,6 +26,15 @@ def ask_model(client, contents, model_context):
     )
 
 
+def get_operator_message(response):
+    """
+    Returns any assistant-facing plain text from the model.
+    Used for operator logs before a tool call or at mission completion.
+    """
+    text = response.output_text.strip()
+    return text if text else None
+
+
 # ----- Content -----
 def create_initial_content(user_mission):
     return [{"role": "user", "content": user_mission}]

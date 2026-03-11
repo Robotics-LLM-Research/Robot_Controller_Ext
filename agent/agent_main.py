@@ -23,15 +23,13 @@ TOOL_TO_ROBOT = {
 
 SYSTEM_PROMPT = (
     "You are the director for two simulated robots: Spot and Drone. "
-    "You control them through function calls only. "
-    "You will receive the latest world state, including status and sensors for both robots. "
-    "Use that shared world state to decide which robot should act next. "
-    "Spot and Drone may be used together to complete one mission. "
+    "Drone is the only robot with environment perception for planning around obstacles. "
+    "Spot should be treated as blind for obstacle analysis. "
+    "If the mission involves a wall, obstacle, going around something, or choosing a path, use Drone observations first before commanding Spot through the obstacle area. "
     "Call at most ONE function per turn. "
-    "If the mission is not complete, call another function instead of asking for permission or merely describing the next step. "
-    "Only respond with plain text when the mission is actually complete."
+    "Before each function call, include a short operator-facing sentence that explains what you are about to do. "
+    "Only respond with plain text and no function call when the mission is actually complete."
 )
-
 
 
 # ---------- State Management ----------
@@ -60,17 +58,6 @@ def update_state(state, fc_name, fc_args, tool_result, world):
 
 def add_log(state, message):
     state["log"].append(message)
-
-
-def print_state(state):
-    print("step_count: ", state["step_count"])
-    print("\tlast_action: ", state["last_action"])
-    print("\tlast_result: ", state["last_result"])
-    print("\tdone: ", state["done"])
-
-    if state["latest_world"] is not None:
-        for robot_name, robot_data in state["latest_world"]["robots"].items():
-            print(f"\t{robot_name} status:", robot_data["status"])
 
 
 # ---------- Utils ----------
@@ -106,60 +93,77 @@ def collect_robot_payload(robot_name):
 
 
 def collect_world_payload():
-    robots = {}
-    for robot_name in ROBOTS:
-        robots[robot_name] = collect_robot_payload(robot_name)
+    drone = collect_robot_payload("Drone")
+    spot_status = safe_json(get_status("Spot"))["status"]
 
     return {
-        "robots": robots
+        "robots": {
+            "Spot": {
+                "status": spot_status,
+                "sensors": None,
+            },
+            "Drone": drone,
+        }
     }
 
 
-def wait_until_robot_idle(robot_name, timeout_s=30, poll_s=0.2):
+def wait_until_robot_idle(robot_name, timeout_s=30, poll_s=0.2, idle_polls_needed=2):
     """ Waits for the specific robot used by the latest tool call to finish. """
     start = time.time()
-    saw_busy = False
+    idle_streak = 0
 
     while time.time() - start < timeout_s:
         payload = safe_json(get_status(robot_name))
         status = payload["status"]
 
-        if status.get("busy", False):
-            saw_busy = True
-        elif saw_busy:
-            return status
-        
+        busy = bool(status.get("busy", False))
+        queued_count = int(status.get("queued_count", 0))
+
+        if (not busy) and queued_count == 0:
+            idle_streak += 1
+            if idle_streak >= idle_polls_needed:
+                return status
+        else:
+            idle_streak = 0
+
         time.sleep(poll_s)
 
-    # Perform emergency stop
-    stop_response = emergency_stop(robot_name)
+    emergency_stop(robot_name)
     print("Performed Emergency Stop.")
-    if stop_response is not None:
-            try:
-                _ = stop_response.json()
-            except Exception:
-                pass
-
     raise TimeoutError("Robot did not finish in time")
 
 
 # ---------- MAIN ----------
-def run_director_loop(agent: ModuleType, client, model_context, user_mission):
+def initialize_mission(agent: ModuleType, user_mission: str):
     state = initialize_state(user_mission)
     add_log(state, f"Mission received: {user_mission}")
 
     contents = agent.create_initial_content(user_mission)
 
-    # Give initial world
     initial_world = collect_world_payload()
     state["latest_world"] = initial_world
-    contents.append(agent.create_observation_content(initial_world, label="Initial World State"))
+
+    contents.append(
+        agent.create_observation_content(
+            initial_world,
+            label="Initial World State"
+        )
+    )
+
+    return state, contents
+
+
+def run_director_loop(agent: ModuleType, client, model_context, user_mission):
+    state, contents = initialize_mission(agent, user_mission)
+    print(f"\nDirector: Got it. {user_mission}\n")
 
     while state["step_count"] < MAX_STEPS:
-        print_state(state)
-
         response = agent.ask_model(client, contents, model_context)
         agent.append_model_response(contents, response)
+
+        operator_msg = agent.get_operator_message(response)
+        if operator_msg:
+            print(f"Director: {operator_msg}")
 
         # Execute function
         tool_call = agent.extract_tool_call(response)
@@ -171,19 +175,19 @@ def run_director_loop(agent: ModuleType, client, model_context, user_mission):
         raw  = tool_call["raw"]
 
         acting_robot = get_robot_for_tool(name)
-        print("Action taken: ", name, args)
         add_log(state, f"Director chose {name} for {acting_robot} with args={args}")
 
+        print(f"Director: Executing {name} on {acting_robot} with args={args}")
         tool_result = execute_fc(name, args)
         
         # Update status/sensors
         latest_status = wait_until_robot_idle(acting_robot)
         latest_world = collect_world_payload()
-        contents.append(agent.create_tool_results(raw, tool_result, acting_robot, latest_status, latest_world))
 
+        contents.append(agent.create_tool_results(raw, tool_result, acting_robot, latest_status, latest_world))
         state = update_state(state, name, args, tool_result, latest_world)
 
-    return("Max steps reached.")
+    return "Mission stopped because max steps were reached."
 
 
 def main():
@@ -191,10 +195,27 @@ def main():
     client = agent.create_client()
     model_context = agent.create_model_context(SYSTEM_PROMPT, get_tool_declarations())
 
-    # Begin the mission
-    user_mission = input("Enter mission: ")
-    final_output = run_director_loop(agent, client, model_context, user_mission)
-    print(final_output)
+    print("Director console ready.")
+
+    while True:
+        user_mission = input("\nEnter mission (or 'q' to quit): ").strip()
+
+        if not user_mission:
+            continue
+        if user_mission.lower() in {"q", "quit", "exit"}:
+            print("Exiting director console.")
+            break
+
+        try:
+            final_output = run_director_loop(agent, client, model_context, user_mission)
+            print(f"\nDirector: {final_output}")
+        except Exception as e:
+            print(f"\nDirector: Mission failed with error: {e}")
+
+        again = input("\nStart a new mission? [y/n]: ").strip().lower()
+        if again not in {"y", "yes"}:
+            print("Exiting director console.")
+            break
 
 
 if __name__ == "__main__":
