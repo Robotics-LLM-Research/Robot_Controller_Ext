@@ -1,5 +1,6 @@
 import queue
 import asyncio
+import math
 import numpy as np
 
 import omni.usd
@@ -199,13 +200,14 @@ class Extension(omni.ext.IExt):
             return False
 
     def _restore_base_poses(self):
-        spot_ok = self._set_prim_pose(
-            prim_path=SPOT_BODY_PATH,
-            position=Gf.Vec3d(float(SPOT_BASE_POSITION[0]), float(SPOT_BASE_POSITION[1]), float(SPOT_BASE_POSITION[2])),
-            rotation_deg=SPOT_BASE_ROTATION_DEG,
-            label="SPOT",
-            required=True
-        )
+        spot_ok = True
+        if self.spot_runtime is not None:
+            spot_ok = self.spot_runtime.teleport_base(
+                x=float(SPOT_BASE_POSITION[0]),
+                y=float(SPOT_BASE_POSITION[1]),
+                z=float(SPOT_BASE_POSITION[2]),
+                yaw_rad=math.radians(float(SPOT_BASE_ROTATION_DEG[2])),
+            )
         drone_ok = self._set_prim_pose(
             prim_path=DRONE_PATH,
             position=DRONE_BASE_POSITION,
