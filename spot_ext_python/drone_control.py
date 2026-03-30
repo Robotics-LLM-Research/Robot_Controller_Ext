@@ -368,7 +368,6 @@ class DroneMotionController:
             if self._alt_target_z is not None:
                 if abs(self._alt_target_z - cur_z) < self._alt_tol:
                     self._alt_active = False
-                    pass
 
             self.base_cmd[:] = [vx, vy, 0.0, wz]
             return self.base_cmd, self._alt_target_z

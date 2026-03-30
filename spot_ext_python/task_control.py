@@ -1,30 +1,4 @@
-import math
-
-import omni.usd
-from pxr import UsdGeom
-
-from .utils import log
-
-
-
-# ----- Utils -----
-def _get_world_pose(prim_path: str):
-    """ Return (x, y, z, yaw) of prim in world frame """
-    stage = omni.usd.get_context().get_stage()
-    prim = stage.GetPrimAtPath(prim_path)
-
-    if prim is None or not prim.IsValid():
-        return None
-
-    cache = UsdGeom.XformCache()
-    m = cache.GetLocalToWorldTransform(prim)
-
-    p = m.ExtractTranslation()
-    x, y, z = float(p[0]), float(p[1]), float(p[2])
-
-    r = m.ExtractRotationMatrix()
-    yaw = math.atan2(float(r[1][0]), float(r[0][0]))
-    return x, y, z, yaw
+from .utils import log, _get_world_pose_xy_yaw
 
 
 class TaskRuntime:
@@ -36,16 +10,10 @@ class TaskRuntime:
     def __init__(self, target_path: str):
         self._target_path = target_path
         self._reset_needed = False
-        self.status = {
-            "ready": True,
-        }
 
     # ---------- API hooks ----------
-    def get_status(self):
-        return self.status
-
     def get_target(self):
-        pose = _get_world_pose(self._target_path)
+        pose = _get_world_pose_xy_yaw(self._target_path, allow_missing=True)
         if pose is None:
             return None
 
@@ -64,8 +32,7 @@ class TaskRuntime:
 
     # ---------- Wiring ----------
     def request_reset(self):
-        """ Next step will perform reset """
-        self._reset_needed = True
+        self.reset()
 
     # ---------- Physics Loop ----------
     def step(self, dt: float):
