@@ -245,6 +245,9 @@ class SpotRuntime:
     def get_sensors(self):
         return self.sensing.get_sensors()
 
+    def get_frame(self):
+        return self.sensing.get_rgb_frame_jpeg_with_meta()
+
     # ---------- Wiring ----------
     def attach_spot(self, spot):
         """ Connects sensors to prism """

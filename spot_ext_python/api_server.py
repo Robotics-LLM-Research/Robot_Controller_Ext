@@ -6,7 +6,7 @@ from fastapi import FastAPI
 
 
 
-def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, get_sensors=None):
+def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, get_sensors=None, get_frame=None):
     app = FastAPI()
 
     # ---------- ENDPOINTS ----------
@@ -59,6 +59,17 @@ def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, 
         if get_sensors is None:
             return {"ok": False, "error": "sensors are not wired"}
         return {"ok": True, "sensors": get_sensors()}
+
+    @app.get("/frame")
+    def frame():
+        if get_frame is None:
+            return {"ok": False, "error": "frame is not wired"}
+
+        frame_data = get_frame()
+        if frame_data is None:
+            return {"ok": False, "error": "frame unavailable"}
+
+        return {"ok": True, **frame_data}
 
     # ---------- SERVER ----------
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")

@@ -74,7 +74,8 @@ class Extension(omni.ext.IExt):
         self._spot_server, self._spot_api_thread = start_spot_api(
             self.spot_cmd_q, HOST, SPOT_PORT,
             get_status=self.spot_runtime.get_status,
-            get_sensors=self.spot_runtime.get_sensors
+            get_sensors=self.spot_runtime.get_sensors,
+            get_frame=self.spot_runtime.get_frame
         ) 
         log(f"Spot api on http://{HOST}:{SPOT_PORT}", 2)
 

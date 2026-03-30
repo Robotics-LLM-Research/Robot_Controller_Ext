@@ -1,5 +1,7 @@
+import io
 import math
 import time
+import base64
 import numpy as np
 
 import omni.usd
@@ -113,6 +115,51 @@ class SensorSuite:
                 s["imu_orientation"] = None
 
         return {k: safe(v) for k, v in s.items()}
+
+    def get_rgb_frame_jpeg_with_meta(self):
+        """
+        Returns latest camera RGB frame as base64 JPEG plus metadata.
+        Returns None when camera is not ready or frame unavailable.
+        """
+        if self._rgb_annot is None:
+            return None
+
+        try:
+            frame = self._rgb_annot.get_data()
+        except Exception as e:
+            log(f"[SENSE] rgb read failed: {e}", 3)
+            return None
+
+        if frame is None or not hasattr(frame, "shape") or len(frame.shape) < 3:
+            return None
+
+        # Replicator RGB data can be HxWx4; keep RGB only
+        rgb = frame[..., :3]
+        if rgb.dtype != np.uint8:
+            try:
+                rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+            except Exception:
+                return None
+
+        h, w = rgb.shape[:2]
+        try:
+            from PIL import Image
+            img = Image.fromarray(rgb, mode="RGB")
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=90)
+            jpeg_bytes = buf.getvalue()
+        except Exception as e:
+            log(f"[SENSE] jpeg encode failed: {e}", 3)
+            return None
+
+        return {
+            "timestamp": time.time(),
+            "frame_name": self._cam_path,
+            "width": int(w),
+            "height": int(h),
+            "format": "jpeg",
+            "image_base64": base64.b64encode(jpeg_bytes).decode("ascii"),
+        }
 
     # ----- Update loop -----
     def update(self):
