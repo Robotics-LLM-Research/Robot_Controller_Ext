@@ -219,6 +219,7 @@ class SpotRuntime:
     ):
         self.cmd_q = cmd_q
         self.spot = None
+        self._spot_body_path = spot_body_path
 
         self._reset_needed = False
         self._policy_inited = False
@@ -241,6 +242,18 @@ class SpotRuntime:
     # ---------- API hooks ----------
     def get_status(self):
         return self.status
+    
+    def get_pose(self):
+        if self.spot is None:
+            return None
+
+        x, y, z, yaw = _get_world_pose_xy_yaw(self._spot_body_path)
+        return {
+            "x": float(x),
+            "y": float(y),
+            "z": float(z),
+            "yaw_rad": float(yaw),
+        }
 
     def get_sensors(self):
         return self.sensing.get_sensors()

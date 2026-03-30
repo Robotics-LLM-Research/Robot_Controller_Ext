@@ -36,6 +36,11 @@ DRONE_PORT = 8002
 CAM_RES = (640, 480)
 SENSOR_HZ = 5.0
 
+# Environment
+ENVIRONMENT_PATH = WORLD_PATH + "/Environment"
+TARGET_PATH = ENVIRONMENT_PATH + "/Target"
+ENVIRONMENT_PORT = 8003
+
 
 
 class Extension(omni.ext.IExt):
@@ -74,6 +79,7 @@ class Extension(omni.ext.IExt):
         self._spot_server, self._spot_api_thread = start_spot_api(
             self.spot_cmd_q, HOST, SPOT_PORT,
             get_status=self.spot_runtime.get_status,
+            get_pose=self.spot_runtime.get_pose,
             get_sensors=self.spot_runtime.get_sensors,
             get_frame=self.spot_runtime.get_frame
         ) 
@@ -82,7 +88,8 @@ class Extension(omni.ext.IExt):
         self._drone_server, self._drone_api_thread = start_drone_api(
             self.drone_cmd_q, HOST, DRONE_PORT,
             get_status=self.drone_runtime.get_status,
-            get_sensors=self.drone_runtime.get_sensors
+            get_sensors=self.drone_runtime.get_sensors,
+            get_frame=self.drone_runtime.get_frame
         ) 
         log(f"Drone api on http://{HOST}:{DRONE_PORT}", 2)
 

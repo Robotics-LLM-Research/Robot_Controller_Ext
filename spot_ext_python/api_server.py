@@ -6,7 +6,15 @@ from fastapi import FastAPI
 
 
 
-def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, get_sensors=None, get_frame=None):
+def start_spot_api(
+    cmd_q: "queue.Queue", 
+    host: str, 
+    port: int, 
+    get_status=None, 
+    get_pose=None,
+    get_sensors=None, 
+    get_frame=None
+):
     app = FastAPI()
 
     # ---------- ENDPOINTS ----------
@@ -16,9 +24,27 @@ def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, 
     
     @app.get("/status")
     def status():
+        """ Get the status of Spot """
         if get_status is None:
             return {"ok": False, "error": "status is not wired"}
-        return {"ok": True, "status": get_status()}
+        
+        status_data = get_status()
+        if status_data is None:
+            return {"ok": False, "error": "status unavailable"}
+
+        return {"ok": True, "status": status_data}
+    
+    @app.get("/pose")
+    def pose():
+        """ Get the x, y, z, yaw of Spot """
+        if get_pose is None:
+            return {"ok": False, "error": "pose is not wired"}
+
+        pose_data = get_pose()
+        if pose_data is None:
+            return {"ok": False, "error": "pose unavailable"}
+
+        return {"ok": True, "pose": pose_data}
     
     # ----- Locomotion -----
     # --- Base ---
@@ -53,15 +79,22 @@ def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, 
         cmd_q.put(("rotate", float(deg)))
         return {"queued": True}
     
-    # --- Sensors ---   
+    # ----- Sensors -----   
     @app.get("/sensors")
     def sensors():
+        """ Get the sensors and IMU data of Spot """
         if get_sensors is None:
             return {"ok": False, "error": "sensors are not wired"}
-        return {"ok": True, "sensors": get_sensors()}
+
+        sensors_data = get_sensors()
+        if sensors_data is None:
+            return {"ok": False, "error": "sensors unavailable"}
+
+        return {"ok": True, "sensors": sensors_data}
 
     @app.get("/frame")
     def frame():
+        """ Get the latest camera frame of Spot """
         if get_frame is None:
             return {"ok": False, "error": "frame is not wired"}
 
@@ -69,7 +102,7 @@ def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, 
         if frame_data is None:
             return {"ok": False, "error": "frame unavailable"}
 
-        return {"ok": True, **frame_data}
+        return {"ok": True, "frame": frame_data}
 
     # ---------- SERVER ----------
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
@@ -79,7 +112,14 @@ def start_spot_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, 
     return server, thread
 
 
-def start_drone_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None, get_sensors=None):
+def start_drone_api(
+    cmd_q: "queue.Queue", 
+    host: str, 
+    port: int, 
+    get_status=None, 
+    get_sensors=None, 
+    get_frame=None,
+):
     app = FastAPI()
 
     # ---------- ENDPOINTS ----------
@@ -91,7 +131,12 @@ def start_drone_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None,
     def status():
         if get_status is None:
             return {"ok": False, "error": "status is not wired"}
-        return {"ok": True, "status": get_status()}
+
+        status_data = get_status()
+        if status_data is None:
+            return {"ok": False, "error": "status unavailable"}
+
+        return {"ok": True, "status": status_data}
     
     # ----- Locomotion -----
     # --- Base ---
@@ -146,12 +191,30 @@ def start_drone_api(cmd_q: "queue.Queue", host: str, port: int, get_status=None,
         cmd_q.put(("look", float(x), float(y)))
         return {"queued": True}
     
-    # --- Sensors ---
+    # ----- Sensors -----
     @app.get("/sensors")
     def sensors():
+        """ Get the sensors and IMU data of Drone """
         if get_sensors is None:
             return {"ok": False, "error": "sensors are not wired"}
-        return {"ok": True, "sensors": get_sensors()}
+
+        sensors_data = get_sensors()
+        if sensors_data is None:
+            return {"ok": False, "error": "sensors unavailable"}
+
+        return {"ok": True, "sensors": sensors_data}
+
+    @app.get("/frame")
+    def frame():
+        """ Get the latest camera frame of Drone """
+        if get_frame is None:
+            return {"ok": False, "error": "frame is not wired"}
+
+        frame_data = get_frame()
+        if frame_data is None:
+            return {"ok": False, "error": "frame unavailable"}
+
+        return {"ok": True, "frame": frame_data}
     
     # ---------- SERVER ----------
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
