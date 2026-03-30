@@ -172,29 +172,53 @@ class Extension(omni.ext.IExt):
             except queue.Empty:
                 break
 
-    def _restore_base_poses(self):
+    def _set_prim_pose(
+        self,
+        prim_path: str,
+        position: Gf.Vec3d,
+        rotation_deg: Gf.Vec3f,
+        label: str,
+        required: bool = True
+    ) -> bool:
         stage = omni.usd.get_context().get_stage()
+        prim = stage.GetPrimAtPath(prim_path)
+        if not prim or not prim.IsValid():
+            if required:
+                log(f"{label} prim missing at {prim_path}", 3)
+                return False
+            log(f"{label} prim missing at {prim_path} (optional)", 2)
+            return True
 
-        spot_prim = stage.GetPrimAtPath(SPOT_PATH)
-        if spot_prim and spot_prim.IsValid():
-            UsdGeom.XformCommonAPI(spot_prim).SetTranslate(
-                Gf.Vec3d(float(SPOT_BASE_POSITION[0]), float(SPOT_BASE_POSITION[1]), float(SPOT_BASE_POSITION[2]))
-            )
-            UsdGeom.XformCommonAPI(spot_prim).SetRotate(SPOT_BASE_ROTATION_DEG)
-        else:
-            log(f"SPOT prim missing at {SPOT_PATH}", 3)
+        try:
+            xform_api = UsdGeom.XformCommonAPI(prim)
+            xform_api.SetTranslate(position)
+            xform_api.SetRotate(rotation_deg)
+            return True
+        except Exception as e:
+            log(f"{label} pose restore failed at {prim_path}: {e}", 3)
+            return False
 
-        drone_prim = stage.GetPrimAtPath(DRONE_PATH)
-        if drone_prim and drone_prim.IsValid():
-            UsdGeom.XformCommonAPI(drone_prim).SetTranslate(DRONE_BASE_POSITION)
-            UsdGeom.XformCommonAPI(drone_prim).SetRotate(DRONE_BASE_ROTATION_DEG)
-        else:
-            log(f"DRONE prim missing at {DRONE_PATH}", 3)
+    def _restore_base_poses(self):
+        spot_ok = self._set_prim_pose(
+            prim_path=SPOT_BODY_PATH,
+            position=Gf.Vec3d(float(SPOT_BASE_POSITION[0]), float(SPOT_BASE_POSITION[1]), float(SPOT_BASE_POSITION[2])),
+            rotation_deg=SPOT_BASE_ROTATION_DEG,
+            label="SPOT",
+            required=True
+        )
+        drone_ok = self._set_prim_pose(
+            prim_path=DRONE_PATH,
+            position=DRONE_BASE_POSITION,
+            rotation_deg=DRONE_BASE_ROTATION_DEG,
+            label="DRONE",
+            required=False
+        )
+        return spot_ok and drone_ok
 
     def _reset_experiment(self):
         self._clear_cmd_queue(self.spot_cmd_q)
         self._clear_cmd_queue(self.drone_cmd_q)
-        self._restore_base_poses()
+        poses_ok = self._restore_base_poses()
 
         if self.spot_runtime is not None:
             self.spot_runtime.request_reset()
@@ -203,7 +227,10 @@ class Extension(omni.ext.IExt):
         if self.task_runtime is not None:
             self.task_runtime.request_reset()
 
-        log("[TASK] reset experiment: restored base poses", 2)
+        if poses_ok:
+            log("[TASK] reset experiment: restored base poses", 2)
+        else:
+            log("[TASK] reset experiment: pose restore partially failed", 3)
 
     async def _init_after_play(self):
         # Wait for PhysX
