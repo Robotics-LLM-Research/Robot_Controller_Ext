@@ -427,6 +427,8 @@ class DroneRuntime:
         self._drone_path = drone_path
         self._drone_body_path = drone_body_path
         self._reset_needed = False
+        self._available = True
+        self._missing_reason = None
 
         self.motion = DroneMotionController()
         self.sensing = SensorSuite(
@@ -437,6 +439,7 @@ class DroneRuntime:
         )
         self.look = DroneLookController(cam_path=cam_path)
         self.status = {
+            "available": True,
             "busy": False,
             "idle": True,
             "queued_count": 0,
@@ -453,6 +456,23 @@ class DroneRuntime:
     # ---------- Wiring ----------
     def attach_drone(self):
         """ Connects sensors to prism """
+        stage = omni.usd.get_context().get_stage()
+        drone_prim = stage.GetPrimAtPath(self._drone_path)
+        body_prim = stage.GetPrimAtPath(self._drone_body_path)
+
+        if not drone_prim or not drone_prim.IsValid():
+            self._available = False
+            self._missing_reason = f"drone prim missing at {self._drone_path}"
+            log(f"[DRONE] Disabled: {self._missing_reason}", 2)
+            return
+        if not body_prim or not body_prim.IsValid():
+            self._available = False
+            self._missing_reason = f"drone body prim missing at {self._drone_body_path}"
+            log(f"[DRONE] Disabled: {self._missing_reason}", 2)
+            return
+
+        self._available = True
+        self._missing_reason = None
         self.sensing.attach()
         self.look.attach()
         self.look.apply_if_need_update()
@@ -493,7 +513,7 @@ class DroneRuntime:
         manual_active = bool(self.motion.has_manual_cmd())
         look_active = bool(self.look.has_pending_update())
 
-        busy = (queued_count > 0) or goal_active or manual_active or look_active
+        busy = self._available and ((queued_count > 0) or goal_active or manual_active or look_active)
 
         active_parts = []
         motion_name = self.motion.active_goal_name()
@@ -503,6 +523,8 @@ class DroneRuntime:
             active_parts.append("look")
 
         self.status = {
+            "available": self._available,
+            "reason": self._missing_reason,
             "busy": busy,
             "idle": not busy,
             "queued_count": queued_count,
@@ -532,8 +554,9 @@ class DroneRuntime:
         """ Physics tick called from the PhysX step callback """
         dt = float(dt)
         self._drain_cmd_queue()
-        self.sensing.update()
-        self.look.apply_if_need_update()
+        if self._available:
+            self.sensing.update()
+            self.look.apply_if_need_update()
         
         # Handle timeline resets
         if self._reset_needed:
@@ -545,6 +568,12 @@ class DroneRuntime:
             # Reset camera to look center
             self.look.reset()
             self.look.apply_if_need_update()
+            self._refresh_status()
+            return
+
+        if not self._available:
+            # Keep runtime idle when USD has no drone
+            self.motion.reset()
             self._refresh_status()
             return
 

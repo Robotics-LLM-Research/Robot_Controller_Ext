@@ -60,7 +60,6 @@ def main():
         "frame_name": payload.get("frame_name"),
         "width": payload.get("width"),
         "height": payload.get("height"),
-        "size": payload.get("size"),
         "format": payload.get("format"),
     }
     with open(meta_path, "w", encoding="utf-8") as f:
