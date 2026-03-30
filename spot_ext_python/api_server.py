@@ -222,3 +222,43 @@ def start_drone_api(
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     return server, thread
+
+
+def start_task_api(
+    host: str,
+    port: int,
+    get_target=None,
+    do_reset=None,
+):
+    app = FastAPI()
+
+    # ---------- ENDPOINTS ----------
+    @app.get("/ping")
+    def ping():
+        return {"ok": True}
+
+    @app.get("/target")
+    def target():
+        """ Get the world pose of Task target """
+        if get_target is None:
+            return {"ok": False, "error": "target is not wired"}
+
+        target_data = get_target()
+        if target_data is None:
+            return {"ok": False, "error": "target unavailable"}
+
+        return {"ok": True, "target": target_data}
+
+    @app.post("/reset")
+    def reset():
+        """ Reset task state to base poses """
+        if do_reset is not None:
+            do_reset()
+        return {"ok": True}
+
+    # ---------- SERVER ----------
+    config = uvicorn.Config(app, host=host, port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    return server, thread
