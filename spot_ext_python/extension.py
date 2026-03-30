@@ -26,9 +26,9 @@ SPOT_IMU_PATH = SPOT_BODY_PATH + "/Imu_Sensor"
 SPOT_PORT = 8001
 
 # Drone
-DRONE_PATH = WORLD_PATH + "/Crazyflie"
+DRONE_PATH = WORLD_PATH + "/Drone"
 DRONE_BODY_PATH = DRONE_PATH + "/body"
-DRONE_CAM_PATH = DRONE_BODY_PATH + "/Crazyflie_Cam"
+DRONE_CAM_PATH = DRONE_BODY_PATH + "/Drone_Cam"
 DRONE_IMU_PATH = None
 DRONE_PORT = 8002
 
@@ -156,7 +156,7 @@ class Extension(omni.ext.IExt):
             UsdGeom.XformCommonAPI(drone_prim).SetTranslate(Gf.Vec3d(0.5, -6.0, 3.5))
             UsdGeom.XformCommonAPI(drone_prim).SetRotate(Gf.Vec3f(0.0, 0.0, 90.0))  # level
         else:
-            log(f"DRONE BODY prim missing at {DRONE_BODY_PATH}", 3)
+            log(f"DRONE prim missing at {DRONE_PATH}", 3)
 
         # Attach sensors/runtime
         self.spot_runtime.attach_spot(self.spot)
