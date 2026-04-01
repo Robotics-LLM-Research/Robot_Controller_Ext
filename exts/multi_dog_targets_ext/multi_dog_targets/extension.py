@@ -20,7 +20,7 @@ HOST = "127.0.0.1"
 # Environment
 ENVIRONMENT_PATH = WORLD_PATH + "/Environment"
 TARGET_PATH = ENVIRONMENT_PATH + "/Target"
-TASK_PORT = 8001
+TASK_PORT = 8000
 
 # Dogs
 DOGS = [
@@ -30,7 +30,7 @@ DOGS = [
         "body_path": WORLD_PATH + "/dog1/body",
         "cam_path": WORLD_PATH + "/dog1/body/dog1_cam",
         "imu_path": WORLD_PATH + "/dog1/body/Imu_Sensor",
-        "port": 8002,
+        "port": 8001,
         "pos": np.array([0.0, 0.0, 0.8], dtype=np.float32),
         "rot": Gf.Vec3f(0.0, 0.0, 0.0),
     },
@@ -40,7 +40,7 @@ DOGS = [
         "body_path": WORLD_PATH + "/dog2/body",
         "cam_path": WORLD_PATH + "/dog2/body/dog2_cam",
         "imu_path": WORLD_PATH + "/dog2/body/Imu_Sensor",
-        "port": 8003,
+        "port": 8002,
         "pos": np.array([0.0, 3.0, 0.8], dtype=np.float32),
         "rot": Gf.Vec3f(0.0, 0.0, 0.0),
     },
@@ -50,7 +50,7 @@ DOGS = [
         "body_path": WORLD_PATH + "/dog3/body",
         "cam_path": WORLD_PATH + "/dog3/body/dog3_cam",
         "imu_path": WORLD_PATH + "/dog3/body/Imu_Sensor",
-        "port": 8004,
+        "port": 8003,
         "pos": np.array([0.0, 6.0, 0.8], dtype=np.float32),
         "rot": Gf.Vec3f(0.0, 0.0, 0.0),
     },
@@ -60,7 +60,7 @@ DOGS = [
         "body_path": WORLD_PATH + "/dog4/body",
         "cam_path": WORLD_PATH + "/dog4/body/dog4_cam",
         "imu_path": WORLD_PATH + "/dog4/body/Imu_Sensor",
-        "port": 8005,
+        "port": 8004,
         "pos": np.array([0.0, 9.0, 0.8], dtype=np.float32),
         "rot": Gf.Vec3f(0.0, 0.0, 0.0),
     },
@@ -70,7 +70,7 @@ DOGS = [
         "body_path": WORLD_PATH + "/dog5/body",
         "cam_path": WORLD_PATH + "/dog5/body/dog5_cam",
         "imu_path": WORLD_PATH + "/dog5/body/Imu_Sensor",
-        "port": 8006,
+        "port": 8005,
         "pos": np.array([0.0, 12.0, 0.8], dtype=np.float32),
         "rot": Gf.Vec3f(0.0, 0.0, 0.0),
     },

@@ -18,3 +18,7 @@ writeTarget.kit = true
 [[python.module]]
 name = "multi_dog_targets"
 path = ".."
+
+[[python.module]]
+name = "sim_core"
+path = "../../.."
