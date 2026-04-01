@@ -17,11 +17,12 @@ class TaskRuntime:
         if pose is None:
             return None
 
-        x, y, z, _yaw = pose
+        x, y, z, yaw = pose
         return {
             "x": float(x),
             "y": float(y),
             "z": float(z),
+            "yaw_rad": float(yaw),
         }
 
     def reset(self):

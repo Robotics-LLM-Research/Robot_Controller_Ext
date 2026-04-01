@@ -1,7 +1,9 @@
 import math
 import queue
 
+import carb
 import numpy as np
+from omni.isaac.dynamic_control import _dynamic_control
 
 from .sensing import SensorSuite
 from .utils import log, _wrap_pi, _get_world_pose_xy_yaw
@@ -201,6 +203,9 @@ class SpotRuntime:
         self.spot = None
         self._spot_body_path = spot_body_path
 
+        self._dc = None
+        self._body = 0
+
         self._reset_needed = False
         self._policy_inited = False
         self._warmup_left = 0
@@ -250,6 +255,48 @@ class SpotRuntime:
     def request_reset(self):
         """ Next setp will reset step """
         self._reset_needed = True
+
+    def _ensure_body_handle(self) -> bool:
+        if self._dc is None:
+            self._dc = _dynamic_control.acquire_dynamic_control_interface()
+
+        if self._body != 0:
+            return True
+
+        self._body = self._dc.get_rigid_body(self._spot_body_path)
+        if self._body == 0:
+            log(f"[SPOT] could not get rigid body at {self._spot_body_path}", 3)
+            return False
+
+        return True
+
+    def teleport_base(self, x: float, y: float, z: float, yaw_rad: float) -> bool:
+        if not self._ensure_body_handle():
+            return False
+
+        half_yaw = 0.5 * float(yaw_rad)
+
+        pose = _dynamic_control.Transform()
+        pose.p = carb.Float3(float(x), float(y), float(z))
+        pose.r = carb.Float4(
+            0.0,
+            0.0,
+            math.sin(half_yaw),
+            math.cos(half_yaw),
+        )
+
+        ok = self._dc.set_rigid_body_pose(self._body, pose)
+
+        self._dc.set_rigid_body_linear_velocity(
+            self._body,
+            carb.Float3(0.0, 0.0, 0.0),
+        )
+        self._dc.set_rigid_body_angular_velocity(
+            self._body,
+            carb.Float3(0.0, 0.0, 0.0),
+        )
+
+        return bool(ok)
 
     # ---------- Physics Loop ----------
     def _refresh_status(self):
