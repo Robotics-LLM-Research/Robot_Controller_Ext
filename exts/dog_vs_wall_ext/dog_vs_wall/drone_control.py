@@ -7,8 +7,8 @@ import omni.usd
 from pxr import UsdGeom, Gf
 from omni.isaac.dynamic_control import _dynamic_control
 
-from .utils import log, _wrap_pi
-from .sensing import SensorSuite
+from sim_core.sensing import SensorSuite
+from sim_core.utils import log, _wrap_pi
 
 
 

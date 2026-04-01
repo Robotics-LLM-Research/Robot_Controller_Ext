@@ -18,3 +18,7 @@ writeTarget.kit = true
 [[python.module]]
 name = "dog_vs_wall"
 path = ".."
+
+[[python.module]]
+name = "sim_core"
+path = "../../.."
