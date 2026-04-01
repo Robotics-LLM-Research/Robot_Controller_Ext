@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+### Changed
+- Updated the root `README.md` to explain that Isaac Sim extension search paths should point to the specific folder under `exts`, and that worlds should be opened from the repo `assets` folder.
+- Updated `exts/dog_vs_wall_ext/dog_vs_wall/README.md` with extension-specific run instructions and documented the local Spot, Drone, and Task API hosts and ports.
+
 ## [1.0.2] - 2025-03-04
 ### Added
 - Root README with project overview and Isaac Sim setup walkthrough (clone, launch, activate extension, load world)

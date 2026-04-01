@@ -1,31 +1,69 @@
-# spot_ext_python — Developer Guide
+# Dog vs Wall
 
-This README is for **developers** who want to understand or modify the extension code. For setup and API usage, see the root [README.md](../../README.md) and [docs/README.md](../docs/README.md).
+This extension runs the Dog vs Wall scenario in Isaac Sim. It starts a Spot robot, a Crazyflie drone, and a task target, then exposes local HTTP APIs for controlling the robots and resetting or querying the task.
 
-## Module Overview
+## Load and run
 
-This Python module is loaded by Isaac Sim when the extension is enabled. It spawns Spot and Crazyflie, starts HTTP APIs, and drives both robots each physics step.
+1. Add `root/exts/dog_vs_wall_ext` to Isaac Sim's **Extension Search Paths**.
+2. Enable **Dog vs Wall** from **Window -> Extensions**.
+3. Open a compatible world from the repo `assets` folder:
+   - `assets/spot_drone_world.usd`
+   - `assets/spot_target_world.usd`
+4. Press **Play** in Isaac Sim to spawn the runtime objects and start the APIs.
 
-## File Roles
+## Local APIs
+
+All APIs bind to host `127.0.0.1`.
+
+| Service | Base URL | Purpose |
+|------|---------|---------|
+| Spot API | `http://127.0.0.1:8001` | Spot motion, pose, status, sensors, and camera frame |
+| Drone API | `http://127.0.0.1:8002` | Drone motion, status, sensors, and camera frame |
+| Task API | `http://127.0.0.1:8003` | Query target pose and reset the scenario |
+
+## Main endpoints
+
+### Spot API
+
+- `GET /ping`
+- `GET /status`
+- `GET /pose`
+- `POST /cmd_vel`
+- `POST /stop`
+- `POST /move`
+- `POST /rotate`
+- `GET /sensors`
+- `GET /frame`
+
+### Drone API
+
+- `GET /ping`
+- `GET /status`
+- `POST /cmd_vel`
+- `POST /stop`
+- `POST /move_fwd`
+- `POST /move_lat`
+- `POST /raise_alt`
+- `POST /rotate`
+- `POST /look`
+- `GET /sensors`
+- `GET /frame`
+
+### Task API
+
+- `GET /ping`
+- `GET /target`
+- `POST /reset`
+
+## Developer notes
+
+This Python module is loaded by Isaac Sim when the extension is enabled. It creates the runtimes on startup, attaches them on first play, and advances them each physics step.
 
 | File | Purpose |
 |------|---------|
-| `extension.py` | Extension entry point. `on_startup` creates runtimes and API servers; subscribes to timeline and PhysX step events. Spawns Spot via `SpotFlatTerrainPolicy`, positions drone, attaches runtimes on first Play. |
-| `api_server.py` | FastAPI apps for Spot (8001) and Drone (8002). Endpoints enqueue commands; `get_sensors` callback returns camera/IMU data. Runs in daemon threads. |
-| `spot_control.py` | `SpotRuntime` and `MotionController`. Interprets queued commands (cmd_vel, move, rotate, stop), applies Spot policy actions, reads sensors. |
-| `drone_control.py` | `DroneRuntime` for Crazyflie. Handles 3D velocity, move/rotate/altitude, camera look. Drives drone via PhysX. |
-| `sensing.py` | `SensorSuite` — captures camera frames and IMU data from USD prims. |
-| `utils.py` | `log()` and helpers (e.g. angle wrapping). |
-| `global_variables.py` | Extension metadata (title, description) from config. |
-
-## Data Flow
-
-1. **Startup**: Extension starts Spot and Drone API servers; runtimes are created but not yet attached.
-2. **First Play**: PhysX ready → spawn Spot, position drone → attach runtimes → subscribe to physics step.
-3. **Each physics step**: `_on_world_physics_step` → `spot_runtime.step()` and `drone_runtime.step()`.
-4. **HTTP requests**: API endpoints put commands into queues; runtimes consume them in `step()`.
-
-## Extending
-
-- **New endpoints**: Add routes in `api_server.py` and corresponding command handling in `spot_control.py` or `drone_control.py`.
-- **New sensors**: Extend `SensorSuite` in `sensing.py` and wire `get_sensors` in the API.
+| `extension.py` | Extension entry point. Defines robot paths, API host and ports, startup logic, and physics-step callbacks. |
+| `sim_core/api_server.py` | FastAPI apps for Spot, Drone, and Task services. |
+| `sim_core/spot_control.py` | `SpotRuntime` and motion command handling for Spot. |
+| `drone_control.py` | `DroneRuntime` and command handling for the Crazyflie drone. |
+| `sim_core/task_control.py` | Task target state and reset logic. |
+| `sim_core/sensing.py` | Sensor capture helpers for camera and IMU data. |

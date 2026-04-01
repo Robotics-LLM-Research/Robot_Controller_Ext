@@ -45,35 +45,31 @@ cd <isaac_sim_install_path>
 1. In Isaac Sim, go to **Window → Extensions**
 2. Click the **three bars (≡)** menu in the Extensions panel
 3. Select **Settings**
-4. Under "Extension Search Paths", click **Add** and enter the path to the **root folder** of this repo (the folder containing `config`, `docs`, and `spot_ext_python`)
+4. Under "Extension Search Paths", click **Add** and enter the path to the specific extension folder under `exts` for the extension you want to use, for example `root/exts/<extension_folder>`
 5. Press **Enter** to confirm
-6. In the list, find **Third Party** and locate **SPOT_EXT**
+6. In the list, find **Third Party** and locate the extension you added
 7. **Enable** the extension by toggling it on
 
 ### 4. Load the world
 
 1. Go to **File → Open**
-2. Navigate to the cloned repo folder
-3. Open **`spot_world.usd`**
+2. Navigate to the repo's `assets` folder
+3. Choose one of the world files that exists there for the extension you want to run
 
-The world will load with Spot and Crazyflie ready for simulation.
+The selected world will load with the assets for that scenario ready for simulation.
 
-### 5. Run the simulation
+### 5. Run the selected extension
 
-Press **Play** in the Isaac Sim timeline. The extension starts HTTP APIs:
+Each extension can have different controls, APIs, and simulation behavior.
 
-- **Spot**: `http://127.0.0.1:8001`
-- **Drone**: `http://127.0.0.1:8002`
-
-See [docs/README.md](docs/README.md) for API usage and interactive documentation.
+After loading the world, refer to the README inside that extension folder under `exts/<extension_folder>` for the correct run instructions and usage details.
 
 ## Project structure
 
 ```
 Spot_Extension/
-├── config/           # Extension configuration
-├── docs/             # Extension readme and changelog
-├── spot_ext_python/  # Extension Python module
-├── spot_world.usd    # Simulation world
+├── assets/           # World and simulation assets
+├── docs/             # Project documentation
+├── exts/             # Isaac Sim extensions
 └── README.md         # This file
 ```
