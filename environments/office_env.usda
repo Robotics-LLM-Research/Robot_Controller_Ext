@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (-17.63149881013794, 58.690519640548736, 2.7353876860069075)
-                double3 target = (-24.216373925251233, 53.98454285952678, -0.345716378260323)
+                double3 position = (-2.8585686184312173, 3.12930119854532, 2.6750500268455557)
+                double3 target = (1.2193523340072643, -3.5039685860332646, -1.1157668601406865)
             }
             dictionary Right = {
                 double3 position = (0, -5, 0)
@@ -18,7 +18,7 @@
                 double3 position = (0, 0, 5)
                 double radius = 5
             }
-            string boundCamera = "/World/Spot/body/thirdp_cam"
+            string boundCamera = "/World/Spot/body/Perspective_Cam"
         }
         dictionary omni_layer = {
             string authoring_layer = "./office_env.usda"
@@ -39,19 +39,18 @@ def Xform "World"
     {
     }
 
-    def Xform "Task"
+    def PhysicsScene "PhysicsScene" (
+        prepend apiSchemas = ["PhysxSceneAPI"]
+    )
     {
-        def Xform "Targets"
-        {
-        }
-
-        def Xform "SpawnPoints"
-        {
-        }
+        vector3f physics:gravityDirection = (0, 0, -1)
+        float physics:gravityMagnitude = 9.81
+        uniform token physxScene:solverType = "TGS"
+        uint physxScene:timeStepsPerSecond = 500
     }
 
     def "Spot" (
-        prepend payload = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/BostonDynamics/spot/spot.usd@
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/BostonDynamics/spot/spot.usd@
     )
     {
         string isaac:namespace (
@@ -61,9 +60,9 @@ def Xform "World"
         bool physxArticulation:enabledSelfCollisions = 1
         int physxArticulation:solverPositionIterationCount = 4
         int physxArticulation:solverVelocityIterationCount = 0
-        quatd xformOp:orient = (-0.7071067690849304, 0, 0, 0.7071067690849304)
+        quatd xformOp:orient = (1, 0, 0, 0)
         double3 xformOp:scale = (1, 1, 1)
-        double3 xformOp:translate = (-21.056716918945312, 56.0416145324707, 0.7326875329017639)
+        double3 xformOp:translate = (0, 0, 0.726545739696244)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
         over "body"
@@ -101,16 +100,17 @@ def Xform "World"
                 float state:angular:physics:velocity = 0
             }
 
-            def Camera "thirdp_cam"
+            def Camera "Perspective_Cam"
             {
                 float2 clippingRange = (0.01, 10000000)
-                float focalLength = 18.147562
+                float focalLength = 10.6
                 float focusDistance = 400
-                float horizontalAperture = 27.1
+                float fStop = 0
+                float horizontalAperture = 20.955
                 custom uniform vector3d omni:kit:centerOfInterest = (0, 0, -400)
-                quatd xformOp:orient = (0.5758155960190389, 0.4220335733717981, -0.4139439495133897, -0.564778247624257)
+                quatd xformOp:orient = (0.6031750542769255, 0.37759865591147523, -0.3687798126870618, -0.5979971226572673)
                 double3 xformOp:scale = (1, 1, 1)
-                double3 xformOp:translate = (-2.5, 0, 1)
+                double3 xformOp:translate = (-2.4010330150696944, 0, 1.5)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
             }
         }
@@ -247,7 +247,7 @@ def "Render" (
                 no_delete = true
             )
             {
-                rel camera = </World/Spot/body/thirdp_cam>
+                rel camera = </World/Spot/body/Perspective_Cam>
                 token omni:rtx:background:source:texture:textureMode = "repeatMirrored"
                 token omni:rtx:background:source:type = "domeLight"
                 bool omni:rtx:dlss:frameGeneration = 0
@@ -259,7 +259,6 @@ def "Render" (
                 bool omni:rtx:pt:lightcache:cached:dontResolveConflicts = 1
                 int omni:rtx:pt:maxSamplesPerLaunch = 2073600
                 int omni:rtx:pt:mgpu:maxPixelsPerRegionExponent = 12
-                int omni:rtx:realtime:mgpu:tileCount = 2
                 color3f omni:rtx:rt:ambientLight:color = (0.1, 0.1, 0.1)
                 bool omni:rtx:rt:demoire = 0
                 bool omni:rtx:rt:ecoMode:enabled
