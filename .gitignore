@@ -32,6 +32,7 @@ Thumbs.db
 # Coverage / testing
 .coverage
 htmlcov/
+tests/output/
 
 # Jupyter
 .ipynb_checkpoints/

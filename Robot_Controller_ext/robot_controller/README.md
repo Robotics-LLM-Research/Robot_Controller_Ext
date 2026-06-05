@@ -1,14 +1,14 @@
-# Dog vs Wall
+# Robot Controller
 
-This extension runs the Dog vs Wall scenario in Isaac Sim. It starts a Spot robot, a Crazyflie drone, and a task target, then exposes local HTTP APIs for controlling the robots and resetting or querying the task.
+This extension runs Spot and Crazyflie robot scenarios in Isaac Sim. It spawns the robots, exposes local HTTP APIs for control and sensing, and provides a task API for querying and resetting the scenario target.
 
 ## Load and run
 
-1. Add `root/exts/dog_vs_wall_ext` to Isaac Sim's **Extension Search Paths**.
-2. Enable **Dog vs Wall** from **Window -> Extensions**.
-3. Open a compatible world from the repo `assets` folder:
-   - `assets/spot_drone_world.usd`
-   - `assets/spot_target_world.usd`
+1. Add `root/Robot_Controller_ext` to Isaac Sim's **Extension Search Paths**.
+2. Enable **Robot Controller** from **Window → Extensions**.
+3. Open a compatible world from the repo `environments` folder:
+   - `environments/spot_drone_world.usd`
+   - `environments/spot_target_world.usd`
 4. Press **Play** in Isaac Sim to spawn the runtime objects and start the APIs.
 
 ## Local APIs
@@ -62,8 +62,9 @@ This Python module is loaded by Isaac Sim when the extension is enabled. It crea
 | File | Purpose |
 |------|---------|
 | `extension.py` | Extension entry point. Defines robot paths, API host and ports, startup logic, and physics-step callbacks. |
-| `sim_core/api_server.py` | FastAPI apps for Spot, Drone, and Task services. |
-| `sim_core/spot_control.py` | `SpotRuntime` and motion command handling for Spot. |
+| `api_server.py` | FastAPI apps for Spot, Drone, and Task services. |
+| `spot_control.py` | `SpotRuntime` and motion command handling for Spot. |
 | `drone_control.py` | `DroneRuntime` and command handling for the Crazyflie drone. |
-| `sim_core/task_control.py` | Task target state and reset logic. |
-| `sim_core/sensing.py` | Sensor capture helpers for camera and IMU data. |
+| `task_control.py` | Task target state and reset logic. |
+| `sensing.py` | Sensor capture helpers for camera and IMU data. |
+| `utils.py` | Logging and USD pose helpers. |

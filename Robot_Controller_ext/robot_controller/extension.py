@@ -11,11 +11,11 @@ import omni.physx as physx
 from pxr import UsdGeom, Gf
 from isaacsim.robot.policy.examples.robots import SpotFlatTerrainPolicy
 
-from sim_core.utils import log
+from .utils import log
 from .drone_control import DroneRuntime
-from sim_core.spot_control import SpotRuntime
-from sim_core.task_control import TaskRuntime
-from sim_core.api_server import start_spot_api, start_drone_api, start_task_api
+from .spot_control import SpotRuntime
+from .task_control import TaskRuntime
+from .api_server import start_spot_api, start_drone_api, start_task_api
 
 WORLD_PATH = "/World"
 HOST = "127.0.0.1"

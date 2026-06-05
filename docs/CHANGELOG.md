@@ -2,8 +2,12 @@
 
 ## [Unreleased]
 ### Changed
-- Updated the root `README.md` to explain that Isaac Sim extension search paths should point to the specific folder under `exts`, and that worlds should be opened from the repo `assets` folder.
-- Updated `exts/dog_vs_wall_ext/dog_vs_wall/README.md` with extension-specific run instructions and documented the local Spot, Drone, and Task API hosts and ports.
+- Refactored project layout: renamed extension to `Robot_Controller_ext` with Python module `robot_controller`.
+- Consolidated shared code into `robot_controller/` (`api_server`, `spot_control`, `sensing`, `task_control`, `utils`).
+- Moved world assets from `assets/` to `environments/`.
+- Moved client test script from `scripts/` to `tests/`.
+- Removed multi-dog scenario extension and assets.
+- Updated documentation for new paths and extension name.
 
 ## [1.0.2] - 2025-03-04
 ### Added

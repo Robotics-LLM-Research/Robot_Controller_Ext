@@ -7,7 +7,7 @@ from urllib.error import HTTPError, URLError
 
 SPOT_API = "http://127.0.0.1:8001"
 FRAME_ENDPOINT = "/frame"
-OUTDIR = "scripts/output"
+OUTDIR = "tests/output"
 REQUEST_TIMEOUT_S = 5.0
 
 
