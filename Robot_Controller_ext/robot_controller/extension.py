@@ -11,41 +11,25 @@ import omni.physx as physx
 from pxr import UsdGeom, Gf
 from isaacsim.robot.policy.examples.robots import SpotFlatTerrainPolicy
 
-from .utils import log
+from .utils import log, get_stage_root, discover_robots
 from .drone_control import DroneRuntime
 from .spot_control import SpotRuntime
 from .task_control import TaskRuntime
 from .api_server import start_spot_api, start_drone_api, start_task_api
 
-WORLD_PATH = "/World"
+DEFAULT_STAGE_ROOT = "/World"
 HOST = "127.0.0.1"
+BASE_PORT = 8001
 
-# Spot
+# Default spawn poses (used when resetting / spawning Spot policy)
 SPOT_BASE_POSITION = np.array([0.0, 0.0, 0.8], dtype=np.float32)
 SPOT_BASE_ROTATION_DEG = Gf.Vec3f(0.0, 0.0, 0.0)
-SPOT_PATH = WORLD_PATH + "/Spot"
-SPOT_BODY_PATH = SPOT_PATH + "/body"
-SPOT_CAM_PATH = SPOT_BODY_PATH + "/Spot_Cam"
-SPOT_IMU_PATH = SPOT_BODY_PATH + "/Imu_Sensor"
-SPOT_PORT = 8001
-
-# Drone
 DRONE_BASE_POSITION = Gf.Vec3d(0.5, -6.0, 3.5)
 DRONE_BASE_ROTATION_DEG = Gf.Vec3f(0.0, 0.0, 90.0)
-DRONE_PATH = WORLD_PATH + "/Drone"
-DRONE_BODY_PATH = DRONE_PATH + "/body"
-DRONE_CAM_PATH = DRONE_BODY_PATH + "/Drone_Cam"
-DRONE_IMU_PATH = None
-DRONE_PORT = 8002
 
 # Camera
 CAM_RES = (640, 480)
 SENSOR_HZ = 5.0
-
-# Environment
-ENVIRONMENT_PATH = WORLD_PATH + "/Environment"
-TARGET_PATH = ENVIRONMENT_PATH + "/Target"
-TASK_PORT = 8003
 
 
 
@@ -54,59 +38,25 @@ class Extension(omni.ext.IExt):
     def on_startup(self, ext_id: str):
         log("STARTUP", 2)
 
+        # Stage state
+        self.stage = None
+        self.stage_root = None
+        self.target_path = None
+
+        # Services
+        self.task_runtime = None
+        self.robots = []
+        self._api_servers = []
+        self._discovered = []
+
         # Runtime state
         self._inited = False
         self._physx_sub = None
         self._physx_iface = None
-        self.spot = None
         self._task_reset_needed = False
 
-        # Commands + runtime
-        self.spot_cmd_q = queue.Queue()
-        self.spot_runtime = SpotRuntime(
-            cmd_q=self.spot_cmd_q,
-            spot_body_path=SPOT_BODY_PATH,
-            cam_path=SPOT_CAM_PATH,
-            imu_path=SPOT_IMU_PATH,
-            cam_res=CAM_RES,
-            sensor_hz=SENSOR_HZ,
-        )
-        self.drone_cmd_q = queue.Queue()
-        self.drone_runtime = DroneRuntime(
-            cmd_q=self.drone_cmd_q,
-            drone_path=DRONE_PATH,
-            drone_body_path=DRONE_BODY_PATH,
-            cam_path=DRONE_CAM_PATH,
-            imu_path=DRONE_IMU_PATH,
-            cam_res=CAM_RES,
-            sensor_hz=SENSOR_HZ,
-        )
-        self.task_runtime = TaskRuntime(target_path=TARGET_PATH)
-
-        # API servers
-        self._spot_server, self._spot_api_thread = start_spot_api(
-            self.spot_cmd_q, HOST, SPOT_PORT,
-            get_status=self.spot_runtime.get_status,
-            get_pose=self.spot_runtime.get_pose,
-            get_sensors=self.spot_runtime.get_sensors,
-            get_frame=self.spot_runtime.get_frame
-        ) 
-        log(f"Spot api on http://{HOST}:{SPOT_PORT}", 2)
-
-        self._drone_server, self._drone_api_thread = start_drone_api(
-            self.drone_cmd_q, HOST, DRONE_PORT,
-            get_status=self.drone_runtime.get_status,
-            get_sensors=self.drone_runtime.get_sensors,
-            get_frame=self.drone_runtime.get_frame
-        ) 
-        log(f"Drone api on http://{HOST}:{DRONE_PORT}", 2)
-
-        self._task_server, self._task_api_thread = start_task_api(
-            HOST, TASK_PORT,
-            get_target=self.task_runtime.get_target,
-            do_reset=self._request_task_reset
-        )
-        log(f"Task api on http://{HOST}:{TASK_PORT}", 2)
+        self._refresh_stage()
+        self._setup_services(discover_robots(self.stage, self.stage_root or DEFAULT_STAGE_ROOT))
 
         # Timeline subscription
         self._timeline = omni.timeline.get_timeline_interface()
@@ -115,43 +65,157 @@ class Extension(omni.ext.IExt):
 
     def on_shutdown(self):
         log("SHUTDOWN", 2)
+        self._teardown_services()
 
-        # Stop API
-        try:
-            if getattr(self, "_spot_server", None):
-                self._spot_server.should_exit = True
-            if getattr(self, "_drone_server", None):
-                self._drone_server.should_exit = True
-            if getattr(self, "_task_server", None):
-                self._task_server.should_exit = True
-        except Exception:
-            pass
-
-        # Unsubscribe PhysX
         try:
             self._physx_sub = None
         except Exception:
             pass
 
-        # Clean self variables
         self._timeline_sub = None
-        self._spot_api_thread = None
-        self._drone_api_thread = None
-        self._task_api_thread = None
-        self.spot_runtime = None
-        self.drone_runtime = None
-        self.task_runtime = None
-
-        self.spot = None
         self._inited = False
+        self.stage = None
+        self.stage_root = None
 
+    # ----- Services -----
+    def _setup_services(self, discovered_robots):
+        """ Create task API first, then one runtime + API per discovered robot """
+        self._teardown_services()
+        self._discovered = list(discovered_robots)
+
+        root = self.stage_root or DEFAULT_STAGE_ROOT
+        self.target_path = f"{root}/Environment/Target"
+
+        self.task_runtime = TaskRuntime(target_path=self.target_path)
+        task_port = BASE_PORT
+        task_server, task_thread = start_task_api(
+            HOST,
+            task_port,
+            get_target=self.task_runtime.get_target,
+            do_reset=self._request_task_reset,
+        )
+        self._api_servers.append({
+            "kind": "task",
+            "name": "task",
+            "port": task_port,
+            "server": task_server,
+            "thread": task_thread,
+        })
+        log(f"Task api on http://{HOST}:{task_port}", 2)
+
+        self.robots = []
+        for i, spec in enumerate(discovered_robots):
+            port = BASE_PORT + 1 + i
+            robot = self._create_robot_service(spec, port)
+            self.robots.append(robot)
+            log(
+                f"{spec['name']} ({spec['kind']}) api on http://{HOST}:{port} -> {spec['path']}",
+                2,
+            )
+
+        if not discovered_robots:
+            log("no robots discovered under stage root", 2)
+
+    def _create_robot_service(self, spec, port):
+        kind = spec["kind"]
+        path = spec["path"]
+        cmd_q = queue.Queue()
+        body_path = f"{path}/body"
+
+        if kind == "spot":
+            runtime = SpotRuntime(
+                cmd_q=cmd_q,
+                spot_body_path=body_path,
+                cam_path=f"{body_path}/Spot_Cam",
+                imu_path=f"{body_path}/Imu_Sensor",
+                cam_res=CAM_RES,
+                sensor_hz=SENSOR_HZ,
+            )
+            server, thread = start_spot_api(
+                cmd_q,
+                HOST,
+                port,
+                get_status=runtime.get_status,
+                get_pose=runtime.get_pose,
+                get_sensors=runtime.get_sensors,
+                get_frame=runtime.get_frame,
+            )
+        elif kind == "drone":
+            runtime = DroneRuntime(
+                cmd_q=cmd_q,
+                drone_path=path,
+                drone_body_path=body_path,
+                cam_path=f"{body_path}/Drone_Cam",
+                imu_path=None,
+                cam_res=CAM_RES,
+                sensor_hz=SENSOR_HZ,
+            )
+            server, thread = start_drone_api(
+                cmd_q,
+                HOST,
+                port,
+                get_status=runtime.get_status,
+                get_sensors=runtime.get_sensors,
+                get_frame=runtime.get_frame,
+            )
+        else:
+            raise ValueError(f"unknown robot kind: {kind}")
+
+        self._api_servers.append({
+            "kind": kind,
+            "name": spec["name"],
+            "port": port,
+            "server": server,
+            "thread": thread,
+        })
+
+        return {
+            "kind": kind,
+            "name": spec["name"],
+            "path": path,
+            "port": port,
+            "cmd_q": cmd_q,
+            "runtime": runtime,
+            "policy": None,
+        }
+
+    def _teardown_services(self):
+        for entry in self._api_servers:
+            try:
+                if entry.get("server") is not None:
+                    entry["server"].should_exit = True
+            except Exception:
+                pass
+
+        self._api_servers = []
+        self.robots = []
+        self.task_runtime = None
+        self._discovered = []
+
+    def _discovery_changed(self, discovered):
+        if len(discovered) != len(self._discovered):
+            return True
+        for old, new in zip(self._discovered, discovered):
+            if old["path"] != new["path"] or old["kind"] != new["kind"]:
+                return True
+        return False
+
+    # ----- Stage -----
+    def _refresh_stage(self):
+        """Cache the active USD stage and resolved stage root."""
+        self.stage = omni.usd.get_context().get_stage()
+        self.stage_root = get_stage_root(self.stage)
+        if self.stage_root:
+            log(f"stage root: {self.stage_root}", 2)
+        else:
+            log(f"stage root not found; using {DEFAULT_STAGE_ROOT}", 2)
+
+    # ----- Timeline -----
     def _on_timeline_event(self, event):
         # Stop -> request reset for next Play
         if not self._timeline.is_playing():
-            if self.spot_runtime is not None:
-                self.spot_runtime.request_reset()
-            if self.drone_runtime is not None:
-                self.drone_runtime.request_reset()
+            for robot in self.robots:
+                robot["runtime"].request_reset()
             if self.task_runtime is not None:
                 self.task_runtime.request_reset()
 
@@ -166,6 +230,7 @@ class Extension(omni.ext.IExt):
         if self.task_runtime is not None:
             self.task_runtime.reset()
 
+    # ----- Commands -----
     def _clear_cmd_queue(self, cmd_q: "queue.Queue"):
         while True:
             try:
@@ -173,13 +238,14 @@ class Extension(omni.ext.IExt):
             except queue.Empty:
                 break
 
+    # ----- Robot Control -----
     def _set_prim_pose(
         self,
         prim_path: str,
         position: Gf.Vec3d,
         rotation_deg: Gf.Vec3f,
         label: str,
-        required: bool = True
+        required: bool = True,
     ) -> bool:
         stage = omni.usd.get_context().get_stage()
         prim = stage.GetPrimAtPath(prim_path)
@@ -200,32 +266,35 @@ class Extension(omni.ext.IExt):
             return False
 
     def _restore_base_poses(self):
-        spot_ok = True
-        if self.spot_runtime is not None:
-            spot_ok = self.spot_runtime.teleport_base(
-                x=float(SPOT_BASE_POSITION[0]),
-                y=float(SPOT_BASE_POSITION[1]),
-                z=float(SPOT_BASE_POSITION[2]),
-                yaw_rad=math.radians(float(SPOT_BASE_ROTATION_DEG[2])),
-            )
-        drone_ok = self._set_prim_pose(
-            prim_path=DRONE_PATH,
-            position=DRONE_BASE_POSITION,
-            rotation_deg=DRONE_BASE_ROTATION_DEG,
-            label="DRONE",
-            required=False
-        )
-        return spot_ok and drone_ok
+        ok = True
+        for robot in self.robots:
+            if robot["kind"] == "spot":
+                spot_ok = robot["runtime"].teleport_base(
+                    x=float(SPOT_BASE_POSITION[0]),
+                    y=float(SPOT_BASE_POSITION[1]),
+                    z=float(SPOT_BASE_POSITION[2]),
+                    yaw_rad=math.radians(float(SPOT_BASE_ROTATION_DEG[2])),
+                )
+                ok = ok and spot_ok
+            elif robot["kind"] == "drone":
+                drone_ok = self._set_prim_pose(
+                    prim_path=robot["path"],
+                    position=DRONE_BASE_POSITION,
+                    rotation_deg=DRONE_BASE_ROTATION_DEG,
+                    label=robot["name"].upper(),
+                    required=False,
+                )
+                ok = ok and drone_ok
+        return ok
 
     def _reset_experiment(self):
-        self._clear_cmd_queue(self.spot_cmd_q)
-        self._clear_cmd_queue(self.drone_cmd_q)
+        for robot in self.robots:
+            self._clear_cmd_queue(robot["cmd_q"])
+
         poses_ok = self._restore_base_poses()
 
-        if self.spot_runtime is not None:
-            self.spot_runtime.request_reset()
-        if self.drone_runtime is not None:
-            self.drone_runtime.request_reset()
+        for robot in self.robots:
+            robot["runtime"].request_reset()
         if self.task_runtime is not None:
             self.task_runtime.request_reset()
 
@@ -235,6 +304,11 @@ class Extension(omni.ext.IExt):
             log("[TASK] reset experiment: pose restore partially failed", 3)
 
     async def _init_after_play(self):
+        self._refresh_stage()
+        discovered = discover_robots(self.stage, self.stage_root or DEFAULT_STAGE_ROOT)
+        if not self._api_servers or self._discovery_changed(discovered):
+            self._setup_services(discovered)
+
         # Wait for PhysX
         for _ in range(120):  # ~2 seconds
             if physx.get_physx_interface() is not None:
@@ -244,21 +318,19 @@ class Extension(omni.ext.IExt):
             log("PhysX not ready", 3)
             return
 
-        # Spawn Spot
-        self.spot = SpotFlatTerrainPolicy(
-            prim_path=SPOT_PATH,
-            name="Spot",
-            position=SPOT_BASE_POSITION
-        )
+        for robot in self.robots:
+            if robot["kind"] == "spot":
+                robot["policy"] = SpotFlatTerrainPolicy(
+                    prim_path=robot["path"],
+                    name=robot["name"],
+                    position=SPOT_BASE_POSITION,
+                )
+                robot["runtime"].attach_spot(robot["policy"])
+            elif robot["kind"] == "drone":
+                robot["runtime"].attach_drone()
 
-        # Spawn drone + normalize both robots to extension-owned base poses
         self._restore_base_poses()
 
-        # Attach sensors/runtime
-        self.spot_runtime.attach_spot(self.spot)
-        self.drone_runtime.attach_drone()
-
-        # Subscribe physics step events
         self._physx_iface = physx.get_physx_interface()
         try:
             self._physx_sub = self._physx_iface.subscribe_physics_step_events(self._on_world_physics_step)
@@ -268,13 +340,14 @@ class Extension(omni.ext.IExt):
     def _on_world_physics_step(self, step_size: float):
         if not self._timeline.is_playing():
             return
-        if self.spot_runtime is None or self.drone_runtime is None or self.task_runtime is None:
+        if self.task_runtime is None:
             return
 
         if self._task_reset_needed:
             self._task_reset_needed = False
             self._reset_experiment()
 
-        self.spot_runtime.step(float(step_size))
-        self.drone_runtime.step(float(step_size))
+        for robot in self.robots:
+            robot["runtime"].step(float(step_size))
+
         self.task_runtime.step(float(step_size))

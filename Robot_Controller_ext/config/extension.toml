@@ -2,12 +2,12 @@
 version = "1.0.2"
 category = "Simulation"
 title = "Robot Controller"
-description = "HTTP REST APIs for controlling Spot and Crazyflie robots in Isaac Sim."
+description = "HTTP REST APIs for controlling robots in Isaac Sim."
 authors = ["NVIDIA"]
 repository = ""
 keywords = []
 changelog = "../../docs/CHANGELOG.md"
-readme = "../robot_controller/README.md"
+readme = "../../README.md"
 writeTarget.kit = true
 
 [dependencies]
