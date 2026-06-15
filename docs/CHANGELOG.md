@@ -12,7 +12,7 @@
 ## [1.0.2] - 2025-03-04
 ### Added
 - Root README with project overview and Isaac Sim setup walkthrough (clone, launch, activate extension, load world)
-- Extension docs README with API description and interactive `/docs` usage for ground robot (8001) and aerial robot (8002)
+- Extension docs README with API description and interactive `/docs` usage for ground robot (8001) and Drone (8002)
 
 
 ## [1.0.1] - 2025-01-21

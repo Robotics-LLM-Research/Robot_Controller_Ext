@@ -5,7 +5,7 @@ This extension adds HTTP REST APIs to Isaac Sim for controlling robots in the si
 ## What the extension does
 
 - **Ground robot (port 8001)**: Control a ground-based robot—velocity commands (`cmd_vel`), move/rotate by distance/angle, stop. Read pose, status, camera, and IMU data.
-- **Aerial robot (port 8002)**: Control a flying robot—3D velocity, move forward/lateral, change altitude, rotate, and camera look. Read camera and IMU via `/sensors`.
+- **Drone (port 8002)**: Control the Drone—3D velocity, move forward/lateral, change altitude, rotate, and camera look. Read camera and IMU via `/sensors`.
 - **Task (port 8003)**: Query the scenario target pose and reset the experiment.
 
 All APIs run as background servers inside Isaac Sim and process commands each physics step.
@@ -28,7 +28,7 @@ Each API exposes interactive docs (Swagger UI) at `/docs`:
 | Service | Base URL | Docs URL |
 |---------|----------|----------|
 | Ground robot | `http://127.0.0.1:8001` | [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs) |
-| Aerial robot | `http://127.0.0.1:8002` | [http://127.0.0.1:8002/docs](http://127.0.0.1:8002/docs) |
+| Drone | `http://127.0.0.1:8002` | [http://127.0.0.1:8002/docs](http://127.0.0.1:8002/docs) |
 | Task | `http://127.0.0.1:8003` | [http://127.0.0.1:8003/docs](http://127.0.0.1:8003/docs) |
 
 ## Quick reference
@@ -45,7 +45,7 @@ Each API exposes interactive docs (Swagger UI) at `/docs`:
 - `GET /sensors` — Camera and IMU data
 - `GET /frame` — Latest camera frame as base64 JPEG
 
-**Aerial robot endpoints**
+**Drone endpoints**
 
 - `GET /ping` — Health check
 - `GET /status` — Robot status

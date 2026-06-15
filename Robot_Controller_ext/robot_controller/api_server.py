@@ -188,7 +188,7 @@ def start_drone_api(
     # --- Equipment ---
     @app.post("/look")
     def look(x: float = 0.0, y: float = 0.0):
-        """ Move the drone on-board camera """
+        """ Move the Drone's on-board camera """
         cmd_q.put(("look", float(x), float(y)))
         return {"queued": True}
     

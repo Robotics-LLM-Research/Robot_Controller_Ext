@@ -114,7 +114,7 @@ class Extension(omni.ext.IExt):
             robot = self._create_robot_service(spec, port)
             self.robots.append(robot)
             log(
-                f"{spec['name']} ({spec['kind']}) api on http://{HOST}:{port} -> {spec['path']}",
+                f"{spec['name']} api on http://{HOST}:{port} -> {spec['path']}",
                 2,
             )
 

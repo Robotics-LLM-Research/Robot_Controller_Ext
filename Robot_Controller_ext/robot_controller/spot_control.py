@@ -187,7 +187,7 @@ class SpotRuntime:
     Object that extension calls every physics step
         - Drains queued commands into the motion controller
         - Updates sensors
-        - Applies velocities to drone rigidbody
+        - Applies velocities to Spot rigidbody
     """
 
     def __init__(

@@ -219,6 +219,7 @@ class DroneMotionController:
         self._rot_tol = math.radians(2.0)
 
         # Altitude goal
+        self._alt_active = False
         self._alt_target_z = None
         self._alt_pending_delta = 0.0   # meters waiting to be applied
         self._alt_tol = 0.05            # meters
@@ -384,7 +385,7 @@ class DroneMotionController:
     
     # ---------- Var Expose ----------
     def has_active_goal(self) -> bool:
-        return self._fwd_active or self._lat_active or self._rot_active
+        return self._fwd_active or self._lat_active or self._rot_active or self._alt_active
 
     def has_manual_cmd(self) -> bool:
         return bool(np.linalg.norm(self._manual_cmd) > 1e-9)
@@ -411,7 +412,7 @@ class DroneRuntime:
     Object that extension calls every physics step
         - Drains queued commands into the motion controller
         - Updates sensors
-        - Applies velocities to drone rigidbody
+        - Applies velocities to Drone rigidbody
     """
 
     def __init__(
@@ -462,12 +463,12 @@ class DroneRuntime:
 
         if not drone_prim or not drone_prim.IsValid():
             self._available = False
-            self._missing_reason = f"drone prim missing at {self._drone_path}"
+            self._missing_reason = f"Drone prim missing at {self._drone_path}"
             log(f"[DRONE] Disabled: {self._missing_reason}", 2)
             return
         if not body_prim or not body_prim.IsValid():
             self._available = False
-            self._missing_reason = f"drone body prim missing at {self._drone_body_path}"
+            self._missing_reason = f"Drone body prim missing at {self._drone_body_path}"
             log(f"[DRONE] Disabled: {self._missing_reason}", 2)
             return
 
@@ -486,7 +487,7 @@ class DroneRuntime:
         Ensures we have valid body and dc
         Inits:
             - dc: Dynamic Control interface
-            - body: rigid body handle for the drone prim path
+            - body: rigid body handle for the Drone prim path
         """
         if hasattr(self, "_dc") is False:
             self._dc = _dynamic_control.acquire_dynamic_control_interface()     # Dynamic Control interface
@@ -572,7 +573,7 @@ class DroneRuntime:
             return
 
         if not self._available:
-            # Keep runtime idle when USD has no drone
+            # Keep runtime idle when USD has no Drone
             self.motion.reset()
             self._refresh_status()
             return

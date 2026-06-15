@@ -5,7 +5,7 @@ An Isaac Sim extension for controlling simulated robots via HTTP REST API. The e
 ## Features
 
 - **Ground robot**: Velocity control, move/rotate commands, pose and status, camera and IMU sensors
-- **Aerial robot**: Full 3D velocity control, move/rotate/altitude, camera
+- **Drone**: Full 3D velocity control, move/rotate/altitude, camera
 - **REST API**: FastAPI-based endpoints for programmatic control
 - **Interactive docs**: Swagger UI at `/docs` for each API
 
@@ -70,7 +70,7 @@ Custom worlds should follow these conventions so discovery and control work with
 | Name pattern | Type |
 |--------------|------|
 | `Spot`, `Spot-1`, `Spot-2`, … | Ground robot |
-| `Drone`, `Drone-1`, `Drone-2`, … | Aerial robot |
+| `Drone`, `Drone-1`, `Drone-2`, … | Drone |
 
 API ports follow **sibling order** under the stage root (see [APIs](#apis)).
 
@@ -79,7 +79,7 @@ API ports follow **sibling order** under the stage root (see [APIs](#apis)).
 | Robot | Required paths | Optional sensor paths |
 |-------|----------------|------------------------|
 | Ground | `{root}/body` | `{root}/body/FrontCam`, `{root}/body/Sensors` |
-| Aerial | `{root}/body` | `{root}/body/FrontCam`, `{root}/body/Sensors` |
+| Drone | `{root}/body` | `{root}/body/FrontCam`, `{root}/body/Sensors` |
 
 **Camera and sensors** — Paths are hardcoded. For `/sensors` and `/frame` to work, name prims exactly as follows under each robot's `body` prim:
 
@@ -108,7 +108,7 @@ Interactive docs (Swagger UI) for each service: `http://127.0.0.1:<port>/docs`
 | Robot kind | Endpoints include |
 |------------|-------------------|
 | Ground (`Spot`, `Spot-N`) | `/status`, `/pose`, `/cmd_vel`, `/move`, `/rotate`, `/sensors`, `/frame`, … |
-| Aerial (`Drone`, `Drone-N`) | `/status`, `/cmd_vel`, `/move_fwd`, `/move_lat`, `/raise_alt`, `/look`, `/sensors`, `/frame`, … |
+| Drone (`Drone`, `Drone-N`) | `/status`, `/cmd_vel`, `/move_fwd`, `/move_lat`, `/raise_alt`, `/look`, `/sensors`, `/frame`, … |
 | Task | `/target`, `/reset` |
 
 ## Main endpoints
@@ -125,7 +125,7 @@ Interactive docs (Swagger UI) for each service: `http://127.0.0.1:<port>/docs`
 - `GET /sensors`
 - `GET /frame`
 
-### Aerial robot API
+### Drone API
 
 - `GET /ping`
 - `GET /status`
@@ -152,9 +152,9 @@ The `robot_controller` Python module is loaded by Isaac Sim when the extension i
 | File | Purpose |
 |------|---------|
 | `Robot_Controller_ext/robot_controller/extension.py` | Extension entry point. Defines robot paths, API host and ports, startup logic, and physics-step callbacks. |
-| `Robot_Controller_ext/robot_controller/api_server.py` | FastAPI apps for ground robot, aerial robot, and task services. |
+| `Robot_Controller_ext/robot_controller/api_server.py` | FastAPI apps for ground robot, Drone, and task services. |
 | `Robot_Controller_ext/robot_controller/spot_control.py` | `SpotRuntime` and motion command handling for the ground robot. |
-| `Robot_Controller_ext/robot_controller/drone_control.py` | `DroneRuntime` and command handling for the aerial robot. |
+| `Robot_Controller_ext/robot_controller/drone_control.py` | `DroneRuntime` and command handling for the Drone. |
 | `Robot_Controller_ext/robot_controller/task_control.py` | Task target state and reset logic. |
 | `Robot_Controller_ext/robot_controller/sensing.py` | Sensor capture helpers for camera and IMU data. |
 | `Robot_Controller_ext/robot_controller/utils.py` | Logging and USD pose helpers. |
