@@ -1,8 +1,9 @@
-import queue
+# pyright: reportMissingImports=false
 import threading
+import queue
 
-import uvicorn
 from fastapi import FastAPI
+import uvicorn
 
 
 

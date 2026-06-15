@@ -1,15 +1,16 @@
+# pyright: reportMissingImports=false
+import base64
 import io
 import math
-import time
-import base64
 import numpy as np
+import time
 
-import omni.usd
-import omni.replicator.core as rep
-
-from pxr import UsdGeom, Sdf
 from isaacsim.sensors.physics import _sensor
+import omni.replicator.core as rep
+import omni.usd
+from pxr import UsdGeom, Sdf
 
+from .constants import CAM_RES, FRONT_CAM_PRIM, SENSORS_PRIM, SENSOR_HZ
 from .utils import log
 
 
@@ -26,16 +27,14 @@ class SensorSuite:
         self,
         cam_path: str,
         imu_path: str,
-        cam_res=(640, 480),
-        sensor_hz: float = 5.0,
     ):
         # Paths
         self._cam_path = cam_path
         self._imu_path = imu_path
 
         # Camera config
-        self._cam_res = cam_res
-        self._sensor_hz = float(sensor_hz)
+        self._cam_res = CAM_RES
+        self._sensor_hz = float(SENSOR_HZ)
 
         # Replicator annotators
         self._rp = None
@@ -60,16 +59,36 @@ class SensorSuite:
 
     # ----- Wiring -----
     def attach(self):
-        """Call once after Play when camera + imu prims exist"""
+        """Call once after Play when FrontCam and Sensors prims exist under body."""
+        stage = omni.usd.get_context().get_stage()
+
+        if self._cam_path is not None:
+            cam_prim = stage.GetPrimAtPath(self._cam_path)
+            if not cam_prim or not cam_prim.IsValid():
+                log(f"[SENSE] {FRONT_CAM_PRIM} not found at {self._cam_path}; camera not attached", 3)
+                self._cam_path = None
+            elif not cam_prim.IsA(UsdGeom.Camera):
+                log(
+                    f"[SENSE] {FRONT_CAM_PRIM} at {self._cam_path} is not a UsdGeom.Camera; camera not attached",
+                    3,
+                )
+                self._cam_path = None
+
         if self._cam_path is not None:
             self._init_camera_depth(self._cam_path)
         else:
-            log("[SENSE] Camera disabled", 2)
+            log("[SENSE] Camera not attached", 2)
+
+        if self._imu_path is not None:
+            sensors_prim = stage.GetPrimAtPath(self._imu_path)
+            if not sensors_prim or not sensors_prim.IsValid():
+                log(f"[SENSE] {SENSORS_PRIM} prim not found at {self._imu_path}; IMU not attached", 3)
+                self._imu_path = None
 
         if self._imu_path is not None:
             self._init_imu(self._imu_path)
         else:
-            log("[SENSE] IMU disabled", 2)
+            log("[SENSE] IMU not attached", 2)
 
     # ----- API getters -----
     def get_sensors(self):
@@ -195,12 +214,6 @@ class SensorSuite:
 
     # ----- Camera / IMU init -----
     def _init_camera_depth(self, cam_path: str):
-        stage = omni.usd.get_context().get_stage()
-        prim = stage.GetPrimAtPath(cam_path)
-        if not prim or not prim.IsValid() or not prim.IsA(UsdGeom.Camera):
-            log(f"[SENSE] Camera prim not found or not a UsdGeom.Camera: {cam_path}", 3)
-            return
-
         self._rp = rep.create.render_product(Sdf.Path(cam_path), self._cam_res)
         self._rgb_annot = rep.AnnotatorRegistry.get_annotator("rgb")
         self._depth_annot = rep.AnnotatorRegistry.get_annotator("distance_to_camera")

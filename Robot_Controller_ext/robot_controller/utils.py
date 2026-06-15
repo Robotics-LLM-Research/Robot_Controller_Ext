@@ -1,15 +1,14 @@
+# pyright: reportMissingImports=false
 import carb
 import math
-import re
 import omni.usd
 from pxr import UsdGeom, UsdPhysics
 
+from .constants import CANDIDATE_STAGE_ROOTS, ROBOT_NAME_RE
 
 
-# ----- Stage -----
-CANDIDATE_STAGE_ROOTS = ("/World", "/Root")
-_ROBOT_NAME_RE = re.compile(r"^(Spot|Drone)(?:-(\d+))?$")
 
+# ----- Stage ----
 def get_stage_root(stage):
     """
     Return the top-level simulation scope for the open stage, if found.
@@ -78,7 +77,7 @@ def discover_robots(stage, stage_root):
             continue
 
         name = child.GetName()
-        match = _ROBOT_NAME_RE.match(name)
+        match = ROBOT_NAME_RE.match(name)
         if not match:
             continue
 
@@ -93,18 +92,7 @@ def discover_robots(stage, stage_root):
     return found
 
 
-# ----- Other -----
-def log(msg: str, level: int):
-    ext_msg = "[EXT] " + msg
-    if level == -1:
-        carb.log_warn(f"[DEBUG] {ext_msg}")
-    if level == 1:
-        carb.log_info(ext_msg)
-    if level == 2:
-        carb.log_warn(ext_msg)
-    if level == 3:
-        carb.log_error(ext_msg)
-
+# ----- Math -----
 def _wrap_pi(a: float) -> float:
     """
     Normalize any anlge to the range (-π, π]. Used for "turn to heading"
@@ -129,3 +117,16 @@ def _get_world_pose_xy_yaw(prim_path: str, allow_missing: bool = False):
     r = m.ExtractRotationMatrix()
     yaw = math.atan2(float(r[1][0]), float(r[0][0]))
     return x, y, z, yaw
+
+
+# ----- Other -----
+def log(msg: str, level: int):
+    ext_msg = "[EXT] " + msg
+    if level == -1:
+        carb.log_warn(f"[DEBUG] {ext_msg}")
+    if level == 1:
+        carb.log_info(ext_msg)
+    if level == 2:
+        carb.log_warn(ext_msg)
+    if level == 3:
+        carb.log_error(ext_msg)

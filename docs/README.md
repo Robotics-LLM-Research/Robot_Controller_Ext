@@ -19,6 +19,8 @@ See the [root README](../README.md) for full setup instructions. In short:
 3. Open a world from `environments/` (for example `spot_drone_world.usd`).
 4. Press **Play**.
 
+For custom worlds, camera and IMU prims must be named **`FrontCam`** and **`Sensors`** under each robot's `body` prim. See the [root README environment setup](../README.md#environment-setup) for details.
+
 ## Interactive API documentation
 
 Each API exposes interactive docs (Swagger UI) at `/docs`:

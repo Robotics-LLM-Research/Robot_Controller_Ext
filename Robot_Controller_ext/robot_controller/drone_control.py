@@ -1,16 +1,16 @@
+# pyright: reportMissingImports=false
 import math
-import queue
 import numpy as np
+import queue
 
 import carb
+from omni.isaac.dynamic_control import _dynamic_control
 import omni.usd
 from pxr import UsdGeom, Gf
-from omni.isaac.dynamic_control import _dynamic_control
 
+from .constants import FRONT_CAM_PRIM
 from .sensing import SensorSuite
 from .utils import log, _wrap_pi
-
-
 
 # --- Camera Look ---
 # Limits
@@ -23,6 +23,8 @@ LOOK_MAX_DOWN_DEG  = 45.0
 LOOK_TRIM_PITCH_DEG = 0.0
 LOOK_TRIM_YAW_DEG   = 0.0
 LOOK_TRIM_ROLL_DEG  = 0.0
+
+
 
 # ---- Utils ----
 def _quat_to_rpy(q) -> tuple[float, float, float]:
@@ -87,7 +89,7 @@ class DroneLookController:
         prim = stage.GetPrimAtPath(self._cam_path)
 
         if prim is None or not prim.IsValid():
-            log(f"[DRONE] Camera prim missing at {self._cam_path}", 3)
+            log(f"[DRONE] {FRONT_CAM_PRIM} not found at {self._cam_path}; look controller not attached", 3)
             self._prim = None
             self._xf = None
             self._rot_op = None
@@ -419,8 +421,6 @@ class DroneRuntime:
         drone_body_path: str,
         cam_path: str,
         imu_path: str | None,
-        cam_res=(640, 480),
-        sensor_hz: float = 5.0,
     ):
         self.cmd_q = cmd_q
         self._drone_path = drone_path
@@ -433,8 +433,6 @@ class DroneRuntime:
         self.sensing = SensorSuite(
             cam_path=cam_path,
             imu_path=imu_path,
-            cam_res=cam_res,
-            sensor_hz=sensor_hz,
         )
         self.look = DroneLookController(cam_path=cam_path)
         self.status = {

@@ -22,6 +22,8 @@ git clone https://github.com/Diego5936/Spot_Extension.git
 cd Spot_Extension
 ```
 
+> **Tip:** Python files in this repo start with `# pyright: reportMissingImports=false` because Isaac Sim provides `omni`, `pxr`, and related packages at runtime. There is no virtual environment in the repo, so editors may otherwise show unresolved-import warnings outside Isaac Sim.
+
 ### 2. Open Isaac Sim
 
 Navigate to your Isaac Sim installation and launch it:
@@ -59,7 +61,7 @@ For endpoint parameters and Swagger links, see [`docs/README.md`](docs/README.md
 
 Custom worlds should follow these conventions so discovery and control work without code changes.
 
-**Stage root** — Resolved automatically, in order: stage `defaultPrim`, parent of the first `PhysicsScene`, then `/World` or `/Root`. Set `defaultPrim` on custom stages when possible (e.g. `defaultPrim = "World"`).
+**Stage root** — Required. Resolved automatically, in order: stage `defaultPrim`, parent of the first `PhysicsScene`, then `/World` or `/Root`. If resolution fails, the extension logs an error and does not start. Set `defaultPrim` on custom stages when possible (e.g. `defaultPrim = "World"`).
 
 **Robot placement** — Robot prims must be **direct children** of the stage root, not nested deeper.
 
@@ -74,10 +76,17 @@ API ports follow **sibling order** under the stage root (see [APIs](#apis)).
 
 **Prim layout** (under each robot root):
 
-| Robot | Expected paths |
-|-------|----------------|
-| Ground | `{root}/body`, `{root}/body/Spot_Cam`, `{root}/body/Imu_Sensor` |
-| Aerial | `{root}/body`, `{root}/body/Drone_Cam` |
+| Robot | Required paths | Optional sensor paths |
+|-------|----------------|------------------------|
+| Ground | `{root}/body` | `{root}/body/FrontCam`, `{root}/body/Sensors` |
+| Aerial | `{root}/body` | `{root}/body/FrontCam`, `{root}/body/Sensors` |
+
+**Camera and sensors** — Paths are hardcoded. For `/sensors` and `/frame` to work, name prims exactly as follows under each robot's `body` prim:
+
+- **`FrontCam`** — front-facing `UsdGeom.Camera` (RGB + depth)
+- **`Sensors`** — IMU sensor prim
+
+If either prim is missing or invalid, the extension logs a warning in the Isaac Sim terminal and skips attaching that sensor. Motion control still works without them.
 
 **Task target** (optional) — `{stage_root}/Environment/Target` for `GET /target` and reset.
 

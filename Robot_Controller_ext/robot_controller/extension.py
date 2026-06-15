@@ -1,35 +1,34 @@
-import queue
+# pyright: reportMissingImports=false
 import asyncio
 import math
-import numpy as np
+import queue
 
-import omni.usd
+from isaacsim.robot.policy.examples.robots import SpotFlatTerrainPolicy
 import omni.ext
 import omni.kit.app
-import omni.timeline
 import omni.physx as physx
+import omni.timeline
+import omni.usd
 from pxr import UsdGeom, Gf
-from isaacsim.robot.policy.examples.robots import SpotFlatTerrainPolicy
 
-from .utils import log, get_stage_root, discover_robots
+from .api_server import start_spot_api, start_drone_api, start_task_api
+from .constants import (
+    BASE_PORT,
+    BODY_PRIM,
+    DRONE_BASE_POSITION,
+    DRONE_BASE_ROTATION_DEG,
+    ENVIRONMENT_PRIM,
+    FRONT_CAM_PRIM,
+    HOST,
+    SENSORS_PRIM,
+    SPOT_BASE_POSITION,
+    SPOT_BASE_ROTATION_DEG,
+    TARGET_PRIM,
+)
 from .drone_control import DroneRuntime
 from .spot_control import SpotRuntime
 from .task_control import TaskRuntime
-from .api_server import start_spot_api, start_drone_api, start_task_api
-
-DEFAULT_STAGE_ROOT = "/World"
-HOST = "127.0.0.1"
-BASE_PORT = 8001
-
-# Default spawn poses (used when resetting / spawning Spot policy)
-SPOT_BASE_POSITION = np.array([0.0, 0.0, 0.8], dtype=np.float32)
-SPOT_BASE_ROTATION_DEG = Gf.Vec3f(0.0, 0.0, 0.0)
-DRONE_BASE_POSITION = Gf.Vec3d(0.5, -6.0, 3.5)
-DRONE_BASE_ROTATION_DEG = Gf.Vec3f(0.0, 0.0, 90.0)
-
-# Camera
-CAM_RES = (640, 480)
-SENSOR_HZ = 5.0
+from .utils import log, get_stage_root, discover_robots
 
 
 
@@ -55,8 +54,11 @@ class Extension(omni.ext.IExt):
         self._physx_iface = None
         self._task_reset_needed = False
 
-        self._refresh_stage()
-        self._setup_services(discover_robots(self.stage, self.stage_root or DEFAULT_STAGE_ROOT))
+        if not self._refresh_stage():
+            log("Extension startup aborted: stage root required", 3)
+            return
+
+        self._setup_services(discover_robots(self.stage, self.stage_root))
 
         # Timeline subscription
         self._timeline = omni.timeline.get_timeline_interface()
@@ -80,11 +82,14 @@ class Extension(omni.ext.IExt):
     # ----- Services -----
     def _setup_services(self, discovered_robots):
         """ Create task API first, then one runtime + API per discovered robot """
+        if not self.stage_root:
+            log("Cannot setup services: stage root not resolved", 3)
+            return
+
         self._teardown_services()
         self._discovered = list(discovered_robots)
 
-        root = self.stage_root or DEFAULT_STAGE_ROOT
-        self.target_path = f"{root}/Environment/Target"
+        self.target_path = f"{self.stage_root}/{ENVIRONMENT_PRIM}/{TARGET_PRIM}"
 
         self.task_runtime = TaskRuntime(target_path=self.target_path)
         task_port = BASE_PORT
@@ -120,16 +125,16 @@ class Extension(omni.ext.IExt):
         kind = spec["kind"]
         path = spec["path"]
         cmd_q = queue.Queue()
-        body_path = f"{path}/body"
+        body_path = f"{path}/{BODY_PRIM}"
+        cam_path = f"{body_path}/{FRONT_CAM_PRIM}"
+        sensors_path = f"{body_path}/{SENSORS_PRIM}"
 
         if kind == "spot":
             runtime = SpotRuntime(
                 cmd_q=cmd_q,
                 spot_body_path=body_path,
-                cam_path=f"{body_path}/Spot_Cam",
-                imu_path=f"{body_path}/Imu_Sensor",
-                cam_res=CAM_RES,
-                sensor_hz=SENSOR_HZ,
+                cam_path=cam_path,
+                imu_path=sensors_path,
             )
             server, thread = start_spot_api(
                 cmd_q,
@@ -145,10 +150,8 @@ class Extension(omni.ext.IExt):
                 cmd_q=cmd_q,
                 drone_path=path,
                 drone_body_path=body_path,
-                cam_path=f"{body_path}/Drone_Cam",
-                imu_path=None,
-                cam_res=CAM_RES,
-                sensor_hz=SENSOR_HZ,
+                cam_path=cam_path,
+                imu_path=sensors_path,
             )
             server, thread = start_drone_api(
                 cmd_q,
@@ -201,14 +204,25 @@ class Extension(omni.ext.IExt):
         return False
 
     # ----- Stage -----
-    def _refresh_stage(self):
+    def _refresh_stage(self) -> bool:
         """Cache the active USD stage and resolved stage root."""
         self.stage = omni.usd.get_context().get_stage()
+        if self.stage is None:
+            log("No USD stage open", 3)
+            self.stage_root = None
+            return False
+
         self.stage_root = get_stage_root(self.stage)
-        if self.stage_root:
-            log(f"stage root: {self.stage_root}", 2)
-        else:
-            log(f"stage root not found; using {DEFAULT_STAGE_ROOT}", 2)
+        if not self.stage_root:
+            log(
+                "stage root could not be resolved "
+                "(set defaultPrim or add a PhysicsScene under the stage root)",
+                3,
+            )
+            return False
+
+        log(f"stage root: {self.stage_root}", 2)
+        return True
 
     # ----- Timeline -----
     def _on_timeline_event(self, event):
@@ -304,8 +318,11 @@ class Extension(omni.ext.IExt):
             log("[TASK] reset experiment: pose restore partially failed", 3)
 
     async def _init_after_play(self):
-        self._refresh_stage()
-        discovered = discover_robots(self.stage, self.stage_root or DEFAULT_STAGE_ROOT)
+        if not self._refresh_stage():
+            log("play init aborted: stage root required", 3)
+            return
+
+        discovered = discover_robots(self.stage, self.stage_root)
         if not self._api_servers or self._discovery_changed(discovered):
             self._setup_services(discovered)
 

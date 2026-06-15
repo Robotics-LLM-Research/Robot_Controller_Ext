@@ -1,9 +1,9 @@
-import math
-import queue
-
+# pyright: reportMissingImports=false
 import carb
+import math
 import numpy as np
 from omni.isaac.dynamic_control import _dynamic_control
+import queue
 
 from .sensing import SensorSuite
 from .utils import log, _wrap_pi, _get_world_pose_xy_yaw
@@ -196,8 +196,6 @@ class SpotRuntime:
         spot_body_path: str,
         cam_path: str,
         imu_path: str,
-        cam_res=(640, 480),
-        sensor_hz: float = 5.0,
     ):
         self.cmd_q = cmd_q
         self.spot = None
@@ -214,8 +212,6 @@ class SpotRuntime:
         self.sensing = SensorSuite(
             cam_path=cam_path,
             imu_path=imu_path,
-            cam_res=cam_res,
-            sensor_hz=sensor_hz,
         )
         self.status = {
             "busy": False,
