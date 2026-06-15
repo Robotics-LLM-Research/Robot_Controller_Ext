@@ -61,9 +61,15 @@ class SensorSuite:
     # ----- Wiring -----
     def attach(self):
         """Call once after Play when camera + imu prims exist"""
-        self._init_camera_depth(self._cam_path)
+        if self._cam_path is not None:
+            self._init_camera_depth(self._cam_path)
+        else:
+            log("[SENSE] Camera disabled", 2)
+
         if self._imu_path is not None:
             self._init_imu(self._imu_path)
+        else:
+            log("[SENSE] IMU disabled", 2)
 
     # ----- API getters -----
     def get_sensors(self):
