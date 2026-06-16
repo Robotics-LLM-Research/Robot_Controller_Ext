@@ -299,7 +299,6 @@ class Extension(omni.ext.IExt):
         if not self._timeline.is_playing():
             self._play_logged = False
             for robot in self.robots:
-                robot["runtime"].sensing.reset()
                 robot["runtime"].request_reset()
             if self.task_runtime is not None:
                 self.task_runtime.request_reset()

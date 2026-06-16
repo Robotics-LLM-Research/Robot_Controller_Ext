@@ -63,17 +63,8 @@ class SensorSuite:
         }
 
     # ----- Wiring -----
-    def reset(self):
-        """ Clear camera/replicator state when simulation stops or before re-attach """
-        self._cleanup_camera()
-        self._camera_init_pending = self._cam_path is not None
-        self._camera_init_attempts = 0
-        self._depth_read_err_logged = False
-        self._last_sensor_t = 0.0
-
     def attach(self):
         """Call once after Play when FrontCam and Sensors prims exist under body."""
-        self.reset()
         stage = omni.usd.get_context().get_stage()
 
         if self._cam_path is not None:
@@ -81,14 +72,12 @@ class SensorSuite:
             if not cam_prim or not cam_prim.IsValid():
                 log(f"[SENSE] {FRONT_CAM_PRIM} not found at {self._cam_path}; camera not attached", 3)
                 self._cam_path = None
-                self._camera_init_pending = False
             elif not cam_prim.IsA(UsdGeom.Camera):
                 log(
                     f"[SENSE] {FRONT_CAM_PRIM} at {self._cam_path} is not a UsdGeom.Camera; camera not attached",
                     3,
                 )
                 self._cam_path = None
-                self._camera_init_pending = False
             else:
                 self._camera_init_pending = True
 
@@ -139,7 +128,7 @@ class SensorSuite:
         Returns latest camera RGB frame as base64 JPEG plus metadata.
         Returns None when camera is not ready or frame unavailable.
         """
-        if self._rgb_annot is None:
+        if not self._camera_ready or self._rgb_annot is None:
             return None
 
         try:
@@ -250,42 +239,14 @@ class SensorSuite:
             self._init_camera_depth(self._cam_path)
             self._camera_init_pending = False
             self._camera_ready = True
-            self._depth_read_err_logged = False
         except Exception as e:
-            self._cleanup_camera()
+            self._rp = None
+            self._rgb_annot = None
+            self._depth_annot = None
             if self._camera_init_attempts == 1 or self._camera_init_attempts % 30 == 0:
                 log(f"[SENSE] Camera init attempt {self._camera_init_attempts} failed: {e}", 3)
 
-    def _ensure_replicator(self) -> bool:
-        import omni.kit.app
-
-        ext_id = "omni.replicator.core"
-        ext_mgr = omni.kit.app.get_app().get_extension_manager()
-        if not ext_mgr.is_extension_enabled(ext_id):
-            ext_mgr.set_extension_enabled_immediate(ext_id, True)
-        return ext_mgr.is_extension_enabled(ext_id)
-
-    def _cleanup_camera(self):
-        if self._rgb_annot is not None and self._rp is not None:
-            try:
-                self._rgb_annot.detach(self._rp)
-            except Exception:
-                pass
-        if self._depth_annot is not None and self._rp is not None:
-            try:
-                self._depth_annot.detach(self._rp)
-            except Exception:
-                pass
-
-        self._rp = None
-        self._rgb_annot = None
-        self._depth_annot = None
-        self._camera_ready = False
-
     def _init_camera_depth(self, cam_path: str):
-        if not self._ensure_replicator():
-            raise RuntimeError("omni.replicator.core is not available")
-
         self._rp = rep.create.render_product(Sdf.Path(cam_path), self._cam_res)
         self._rgb_annot = rep.AnnotatorRegistry.get_annotator("rgb")
         self._depth_annot = rep.AnnotatorRegistry.get_annotator("distance_to_camera")
