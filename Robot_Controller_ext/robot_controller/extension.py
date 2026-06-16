@@ -35,7 +35,7 @@ from .utils import log, get_stage_root, discover_robots
 class Extension(omni.ext.IExt):
 
     def on_startup(self, ext_id: str):
-        log("STARTUP", 2)
+        log("============================== STARTUP ==============================", 2)
 
         # Stage state
         self.stage = None
@@ -55,6 +55,9 @@ class Extension(omni.ext.IExt):
         self._bound_stage_root = None
         self._play_init_running = False
 
+        # Log Flags
+        self._last_logged_stage_root = None
+
         # TImeline Subscription
         self._timeline = omni.timeline.get_timeline_interface()
         stream = self._timeline.get_timeline_event_stream()
@@ -72,7 +75,7 @@ class Extension(omni.ext.IExt):
             log("No stage open yet; waiting for stage open event", 2)
 
     def on_shutdown(self):
-        log("SHUTDOWN", 2)
+        log("============================== SHUTDOWN ==============================", 2)
         self._teardown_services()
 
         try:
@@ -244,6 +247,7 @@ class Extension(omni.ext.IExt):
         if self.stage is None:
             log("No USD stage open", 3)
             self.stage_root = None
+            self._last_logged_stage_root = None
             return False
 
         self.stage_root = get_stage_root(self.stage)
@@ -255,7 +259,9 @@ class Extension(omni.ext.IExt):
             )
             return False
 
-        log(f"stage root: {self.stage_root}", 2)
+        if self._last_logged_stage_root != self.stage_root:
+            log(f"Stage root: {self.stage_root}", 2)
+            self._last_logged_stage_root = self.stage_root
         return True
 
     def _on_stage_event(self, event):
@@ -269,6 +275,7 @@ class Extension(omni.ext.IExt):
         self._teardown_services()
         self.stage = None
         self.stage_root = None
+        self._last_logged_stage_root = None
         self.target_path = None
         self._physx_sub = None
 
@@ -293,6 +300,7 @@ class Extension(omni.ext.IExt):
                 self.task_runtime.request_reset()
             return
 
+        log("============================== PLAY ==============================", 2)
         asyncio.ensure_future(self._init_after_play())
 
     def _request_task_reset(self):

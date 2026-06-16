@@ -78,6 +78,9 @@ class DroneLookController:
         self._xf = None
         self._rot_op = None
 
+        # Log Flags
+        self._missing_cam_logged = False
+
     def reset(self):
         self._yaw_deg = 0.0
         self._pitch_deg = 0.0
@@ -89,12 +92,15 @@ class DroneLookController:
         prim = stage.GetPrimAtPath(self._cam_path)
 
         if prim is None or not prim.IsValid():
-            log(f"[DRONE] {FRONT_CAM_PRIM} not found at {self._cam_path}; look controller not attached", 3)
+            if not self._missing_cam_logged:
+                log(f"[DRONE] {FRONT_CAM_PRIM} not found at {self._cam_path}; look controller not attached", 3)
+                self._missing_cam_logged = True
             self._prim = None
             self._xf = None
             self._rot_op = None
             return False
 
+        self._missing_cam_logged = False
         self._prim = prim
         self._xf = UsdGeom.Xformable(prim)
 

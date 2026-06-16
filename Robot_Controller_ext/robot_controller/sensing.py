@@ -76,8 +76,6 @@ class SensorSuite:
 
         if self._cam_path is not None:
             self._init_camera_depth(self._cam_path)
-        else:
-            log("[SENSE] Camera not attached", 2)
 
         if self._imu_path is not None:
             sensors_prim = stage.GetPrimAtPath(self._imu_path)
@@ -87,8 +85,6 @@ class SensorSuite:
 
         if self._imu_path is not None:
             self._init_imu(self._imu_path)
-        else:
-            log("[SENSE] IMU not attached", 2)
 
     # ----- API getters -----
     def get_sensors(self):
