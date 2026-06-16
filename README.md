@@ -12,6 +12,14 @@ An Isaac Sim extension for controlling simulated robots via HTTP REST API. The e
 ## Requirements
 
 - [NVIDIA Isaac Sim](https://developer.nvidia.com/isaac-sim) (2023.1+ recommended)
+- Isaac Sim Python dependency: `psutil`
+
+This extension runs inside Isaac Sim's bundled Python environment, not a repo-local virtual environment. Install runtime Python dependencies with Isaac Sim's `python.sh`:
+
+```bash
+cd ~/path/to/isaacsim 
+./python.sh -m pip install psutil
+```
 
 ## Quick Start
 

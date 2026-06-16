@@ -3,11 +3,14 @@
 ## [Unreleased]
 
 ### Changed
-- Camera init deferred to physics update instead of running on Play attach.
+- Replaced raw Replicator camera annotator capture with Isaac Sim's higher-level `isaacsim.sensors.camera.Camera` API for `/frame`.
+- Camera frame capture now reads RGB frames through `Camera.get_rgb(device="cpu")` and encodes them as JPEG/base64 for the HTTP API.
+- Sensor summary updates remain rate-limited by `SENSOR_HZ` instead of running every physics step.
 
 ### Fixed
-- Play crash and teleop failures caused by camera init running too early during Play attach.
-- Extension enable errors from declaring `omni.replicator.core` as an explicit dependency.
+- `/frame` returning unavailable because Replicator `rgb` annotator initialization failed with `LdrColorSDhostPtr`.
+- Camera API startup failure by declaring the required Isaac Sim extension dependencies in `extension.toml`.
+- Extension activation failure caused by missing `psutil` in Isaac Sim's bundled Python environment.
 
 ## [1.0.3] - 2026-06-16
 ### Added

@@ -5,10 +5,10 @@ import math
 import numpy as np
 import time
 
+from isaacsim.sensors.camera import Camera
 from isaacsim.sensors.physics import _sensor
-import omni.replicator.core as rep
 import omni.usd
-from pxr import UsdGeom, Sdf
+from pxr import UsdGeom
 
 from .constants import CAM_RES, FRONT_CAM_PRIM, SENSORS_PRIM, SENSOR_HZ
 from .utils import log
@@ -36,12 +36,17 @@ class SensorSuite:
         self._cam_res = CAM_RES
         self._sensor_hz = float(SENSOR_HZ)
 
-        # Replicator annotators
-        self._rp = None
-        self._rgb_annot = None
-        self._depth_annot = None
+        # Camera
+        self._camera = None
         self._camera_ready = False
+        self._latest_rgb = None
         self._depth_read_err_logged = False
+
+        self._camera_error = None
+        self._camera_retry_count = 0
+        self._camera_retry_max = 60
+        self._camera_retry_interval_s = 0.25
+        self._last_camera_retry_t = 0.0
 
         # IMU
         self._imu_iface = None
@@ -76,14 +81,7 @@ class SensorSuite:
                 )
                 self._cam_path = None
             else:
-                try:
-                    self._init_camera_depth(self._cam_path)
-                    self._camera_ready = True
-                except Exception as e:
-                    log(f"[SENSE] Camera init failed: {e}", 3)
-                    self._rp = None
-                    self._rgb_annot = None
-                    self._depth_annot = None
+                self._try_init_camera(self._cam_path)
 
         if self._imu_path is not None:
             sensors_prim = stage.GetPrimAtPath(self._imu_path)
@@ -132,19 +130,18 @@ class SensorSuite:
         Returns latest camera RGB frame as base64 JPEG plus metadata.
         Returns None when camera is not ready or frame unavailable.
         """
-        if not self._camera_ready or self._rgb_annot is None:
+        if not self._camera_ready or self._camera is None:
             return None
 
         try:
-            frame = self._rgb_annot.get_data()
+            frame = self._camera.get_rgb(device="cpu")
         except Exception as e:
-            log(f"[SENSE] rgb read failed: {e}", 3)
+            log(f"[SENSE] camera get_rgb failed: {e}", 3)
             return None
 
         if frame is None or not hasattr(frame, "shape") or len(frame.shape) < 3:
             return None
 
-        # Replicator RGB data can be HxWx4; keep RGB only
         rgb = frame[..., :3]
         if rgb.dtype != np.uint8:
             try:
@@ -178,39 +175,13 @@ class SensorSuite:
         Call every physics step
         - Camera/IMU summaries update at SENSOR_HZ
         """
-        self._update_camera_imu_throttled()
+        self._update_imu_rate_limited()
 
-    def _update_camera_imu_throttled(self):
+    def _update_imu_rate_limited(self):
         now = time.time()
         if (now - self._last_sensor_t) < (1.0 / self._sensor_hz):
             return
         self._last_sensor_t = now
-
-        # Depth summary
-        if self._camera_ready and self._depth_annot is not None:
-            try:
-                depth = self._depth_annot.get_data()  # (H,W) float32 meters
-            except Exception as e:
-                if not self._depth_read_err_logged:
-                    log(f"[SENSE] depth read failed: {e}", 3)
-                    self._depth_read_err_logged = True
-                depth = None
-
-            if depth is not None and hasattr(depth, "shape") and len(depth.shape) == 2:
-                h, w = depth.shape
-                band_y0, band_y1 = int(h * 0.45), int(h * 0.55)
-
-                def finite_min(arr):
-                    arr = arr[np.isfinite(arr)]
-                    return float(arr.min()) if arr.size else None
-
-                left = finite_min(depth[band_y0:band_y1, int(w * 0.10):int(w * 0.30)])
-                front = finite_min(depth[band_y0:band_y1, int(w * 0.45):int(w * 0.55)])
-                right = finite_min(depth[band_y0:band_y1, int(w * 0.70):int(w * 0.90)])
-
-                self._sensor_state["front_clear_m"] = front
-                self._sensor_state["left_clear_m"] = left
-                self._sensor_state["right_clear_m"] = right
 
         # IMU
         if self._imu_path is not None and self._imu_iface is not None:
@@ -227,15 +198,34 @@ class SensorSuite:
             except Exception as e:
                 log(f"[SENSE] imu read failed: {e}", 3)
 
+    def _try_init_camera(self, cam_path: str) -> bool:
+        try:
+            self._init_camera_depth(cam_path)
+            self._camera_ready = True
+            self._camera_error = None
+            self._camera_retry_count = 0
+            return True
+        except Exception as e:
+            self._camera_ready = False
+            self._camera_error = str(e)
+            self._camera_retry_count += 1
+            self._camera = None
+            self._latest_rgb = None
+            log(f"[SENSE] Camera init failed: {e}", 3)
+            return False
+    
     def _init_camera_depth(self, cam_path: str):
-        self._rp = rep.create.render_product(Sdf.Path(cam_path), self._cam_res)
-        self._rgb_annot = rep.AnnotatorRegistry.get_annotator("rgb")
-        self._depth_annot = rep.AnnotatorRegistry.get_annotator("distance_to_camera")
+        self._camera = Camera(
+            prim_path=cam_path,
+            name="robot_front_camera",
+            frequency=int(self._sensor_hz),
+            resolution=self._cam_res,
+        )
 
-        self._rgb_annot.attach(self._rp)
-        self._depth_annot.attach(self._rp)
+        self._camera.initialize()
+        self._camera_ready = True
 
-        log(f"[SENSE] Camera + Depth ready: {cam_path} @ {self._cam_res}", 2)
+        log(f"[SENSE] Camera API ready: {cam_path} @ {self._cam_res}", 2)
 
     def _init_imu(self, imu_path: str):
         self._imu_iface = _sensor.acquire_imu_sensor_interface()
