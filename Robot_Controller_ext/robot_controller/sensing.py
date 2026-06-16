@@ -218,7 +218,6 @@ class SensorSuite:
         self._camera = Camera(
             prim_path=cam_path,
             name="robot_front_camera",
-            frequency=int(self._sensor_hz),
             resolution=self._cam_res,
         )
 
