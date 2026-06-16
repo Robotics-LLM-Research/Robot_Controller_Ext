@@ -11,7 +11,7 @@ import omni.timeline
 import omni.usd
 from pxr import UsdGeom, Gf
 
-from .api_server import start_spot_api, start_drone_api, start_task_api
+from .api_server import start_spot_api, start_drone_api, start_task_api, stop_api_server
 from .constants import (
     BASE_PORT,
     BODY_PRIM,
@@ -49,21 +49,27 @@ class Extension(omni.ext.IExt):
         self._discovered = []
 
         # Runtime state
-        self._inited = False
         self._physx_sub = None
         self._physx_iface = None
         self._task_reset_needed = False
+        self._bound_stage_root = None
+        self._play_init_running = False
 
-        if not self._refresh_stage():
-            log("Extension startup aborted: stage root required", 3)
-            return
-
-        self._setup_services(discover_robots(self.stage, self.stage_root))
-
-        # Timeline subscription
+        # TImeline Subscription
         self._timeline = omni.timeline.get_timeline_interface()
         stream = self._timeline.get_timeline_event_stream()
         self._timeline_sub = stream.create_subscription_to_pop(self._on_timeline_event)
+
+        usd_context = omni.usd.get_context()
+        self._stage_sub = usd_context.get_stage_event_stream().create_subscription_to_pop(
+            self._on_stage_event,
+            name="robot_controller_stage",
+        )
+
+        if self._refresh_stage():
+            self._sync_services_if_needed(discover_robots(self.stage, self.stage_root))
+        else:
+            log("No stage open yet; waiting for stage open event", 2)
 
     def on_shutdown(self):
         log("SHUTDOWN", 2)
@@ -75,9 +81,10 @@ class Extension(omni.ext.IExt):
             pass
 
         self._timeline_sub = None
-        self._inited = False
+        self._stage_sub = None
         self.stage = None
         self.stage_root = None
+        self._bound_stage_root = None
 
     # ----- Services -----
     def _setup_services(self, discovered_robots):
@@ -86,7 +93,6 @@ class Extension(omni.ext.IExt):
             log("Cannot setup services: stage root not resolved", 3)
             return
 
-        self._teardown_services()
         self._discovered = list(discovered_robots)
 
         self.target_path = f"{self.stage_root}/{ENVIRONMENT_PRIM}/{TARGET_PRIM}"
@@ -185,8 +191,7 @@ class Extension(omni.ext.IExt):
     def _teardown_services(self):
         for entry in self._api_servers:
             try:
-                if entry.get("server") is not None:
-                    entry["server"].should_exit = True
+                stop_api_server(entry.get("server"))
             except Exception:
                 pass
 
@@ -194,6 +199,35 @@ class Extension(omni.ext.IExt):
         self.robots = []
         self.task_runtime = None
         self._discovered = []
+        self._bound_stage_root = None
+
+    def _sync_services_if_needed(self, discovered) -> bool:
+        """ Rebuild HTTP services only when stage root or robot discovery changed """
+        if not self.stage_root:
+            return False
+
+        if (
+            self._api_servers
+            and self._bound_stage_root == self.stage_root
+            and not self._discovery_changed(discovered)
+        ):
+            return False
+
+        if self._api_servers:
+            self._teardown_services()
+        self._setup_services(discovered)
+        self._bound_stage_root = self.stage_root
+        return True
+
+    def _robots_attached(self) -> bool:
+        if not self.robots:
+            return True
+        for robot in self.robots:
+            if robot["kind"] == "spot" and robot.get("policy") is None:
+                return False
+            if robot["kind"] == "drone" and not robot["runtime"].is_attached():
+                return False
+        return True
 
     def _discovery_changed(self, discovered):
         if len(discovered) != len(self._discovered):
@@ -224,6 +258,31 @@ class Extension(omni.ext.IExt):
         log(f"stage root: {self.stage_root}", 2)
         return True
 
+    def _on_stage_event(self, event):
+        if event.type == int(omni.usd.StageEventType.CLOSED):
+            self._on_stage_closed()
+        elif event.type == int(omni.usd.StageEventType.OPENED):
+            self._on_stage_opened()
+
+    def _on_stage_closed(self):
+        log("stage closed", 2)
+        self._teardown_services()
+        self.stage = None
+        self.stage_root = None
+        self.target_path = None
+        self._physx_sub = None
+
+    def _on_stage_opened(self):
+        log("stage opened", 2)
+        if not self._refresh_stage():
+            log("stage opened but stage root not resolved", 3)
+            return
+
+        discovered = discover_robots(self.stage, self.stage_root)
+        rebuilt = self._sync_services_if_needed(discovered)
+        if (rebuilt or not self._robots_attached()) and self._timeline.is_playing():
+            asyncio.ensure_future(self._init_after_play())
+
     # ----- Timeline -----
     def _on_timeline_event(self, event):
         # Stop -> request reset for next Play
@@ -232,11 +291,9 @@ class Extension(omni.ext.IExt):
                 robot["runtime"].request_reset()
             if self.task_runtime is not None:
                 self.task_runtime.request_reset()
+            return
 
-        # First-ever Play -> spawn + subscribe
-        if (not self._inited) and self._timeline.is_playing():
-            self._inited = True
-            asyncio.ensure_future(self._init_after_play())
+        asyncio.ensure_future(self._init_after_play())
 
     def _request_task_reset(self):
         """ API-thread safe hook: schedule reset on next physics tick """
@@ -317,14 +374,29 @@ class Extension(omni.ext.IExt):
         else:
             log("[TASK] reset experiment: pose restore partially failed", 3)
 
+    # ----- Play Init -----
     async def _init_after_play(self):
+        if self._play_init_running:
+            return
+        self._play_init_running = True
+        try:
+            await self._run_play_init()
+        finally:
+            self._play_init_running = False
+
+    async def _run_play_init(self):
         if not self._refresh_stage():
             log("play init aborted: stage root required", 3)
             return
 
         discovered = discover_robots(self.stage, self.stage_root)
-        if not self._api_servers or self._discovery_changed(discovered):
-            self._setup_services(discovered)
+        services_rebuilt = self._sync_services_if_needed(discovered)
+
+        if not self.robots:
+            return
+
+        if not services_rebuilt and self._robots_attached():
+            return
 
         # Wait for PhysX
         for _ in range(120):  # ~2 seconds
@@ -336,23 +408,26 @@ class Extension(omni.ext.IExt):
             return
 
         for robot in self.robots:
-            if robot["kind"] == "spot":
+            if robot["kind"] == "spot" and robot.get("policy") is None:
                 robot["policy"] = SpotFlatTerrainPolicy(
                     prim_path=robot["path"],
                     name=robot["name"],
                     position=SPOT_BASE_POSITION,
                 )
                 robot["runtime"].attach_spot(robot["policy"])
-            elif robot["kind"] == "drone":
+            elif robot["kind"] == "drone" and not robot["runtime"].is_attached():
                 robot["runtime"].attach_drone()
 
         self._restore_base_poses()
 
-        self._physx_iface = physx.get_physx_interface()
-        try:
-            self._physx_sub = self._physx_iface.subscribe_physics_step_events(self._on_world_physics_step)
-        except Exception as e:
-            log(f"Physx subscribe failed: {e}", 3)
+        if self._physx_sub is None:
+            self._physx_iface = physx.get_physx_interface()
+            try:
+                self._physx_sub = self._physx_iface.subscribe_physics_step_events(
+                    self._on_world_physics_step
+                )
+            except Exception as e:
+                log(f"Physx subscribe failed: {e}", 3)
 
     def _on_world_physics_step(self, step_size: float):
         if not self._timeline.is_playing():

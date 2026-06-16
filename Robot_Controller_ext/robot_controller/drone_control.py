@@ -478,6 +478,9 @@ class DroneRuntime:
         self.look.attach()
         self.look.apply_if_need_update()
 
+    def is_attached(self) -> bool:
+        return self._available
+
     def request_reset(self):
         """ Next setp will reset step """
         self._reset_needed = True

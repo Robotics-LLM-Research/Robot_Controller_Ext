@@ -7,6 +7,13 @@ import uvicorn
 
 
 
+def stop_api_server(server) -> None:
+    """ Signal a background uvicorn server to stop without joining its thread """
+    if server is None:
+        return
+    server.should_exit = True
+    server.force_exit = True
+
 def start_spot_api(
     cmd_q: "queue.Queue", 
     host: str, 
