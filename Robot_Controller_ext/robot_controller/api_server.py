@@ -20,7 +20,8 @@ def start_spot_api(
     get_status=None, 
     get_pose=None,
     get_sensors=None, 
-    get_frame=None
+    get_frame=None,
+    get_camera_debug=None,
 ):
     app = FastAPI()
 
@@ -111,6 +112,13 @@ def start_spot_api(
 
         return {"ok": True, "frame": frame_data}
 
+    @app.get("/debug/camera")
+    def debug_camera():
+        """ Step-by-step camera init diagnostics (paste JSON when reporting issues). """
+        if get_camera_debug is None:
+            return {"ok": False, "error": "camera debug is not wired"}
+        return {"ok": True, "debug": get_camera_debug()}
+
     # ---------- SERVER ----------
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
@@ -126,6 +134,7 @@ def start_drone_api(
     get_status=None, 
     get_sensors=None, 
     get_frame=None,
+    get_camera_debug=None,
 ):
     app = FastAPI()
 
@@ -222,6 +231,12 @@ def start_drone_api(
             return {"ok": False, "error": "frame unavailable"}
 
         return {"ok": True, "frame": frame_data}
+
+    @app.get("/debug/camera")
+    def debug_camera():
+        if get_camera_debug is None:
+            return {"ok": False, "error": "camera debug is not wired"}
+        return {"ok": True, "debug": get_camera_debug()}
     
     # ---------- SERVER ----------
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
