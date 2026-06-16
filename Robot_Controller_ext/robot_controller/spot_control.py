@@ -246,7 +246,10 @@ class SpotRuntime:
     def attach_spot(self, spot):
         """ Connects sensors to prism """
         self.spot = spot
-        self.sensing.attach()
+        try:
+            self.sensing.attach()
+        except Exception as e:
+            log(f"[SPOT] sensing attach failed: {e}", 3)
 
     def request_reset(self):
         """ Next setp will reset step """

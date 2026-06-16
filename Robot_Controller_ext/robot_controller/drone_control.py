@@ -480,7 +480,10 @@ class DroneRuntime:
 
         self._available = True
         self._missing_reason = None
-        self.sensing.attach()
+        try:
+            self.sensing.attach()
+        except Exception as e:
+            log(f"[DRONE] sensing attach failed: {e}", 3)
         self.look.attach()
         self.look.apply_if_need_update()
 

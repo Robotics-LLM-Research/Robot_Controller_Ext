@@ -421,19 +421,6 @@ class Extension(omni.ext.IExt):
             log("PhysX not ready", 3)
             return
 
-        for robot in self.robots:
-            if robot["kind"] == "spot" and robot.get("policy") is None:
-                robot["policy"] = SpotFlatTerrainPolicy(
-                    prim_path=robot["path"],
-                    name=robot["name"],
-                    position=SPOT_BASE_POSITION,
-                )
-                robot["runtime"].attach_spot(robot["policy"])
-            elif robot["kind"] == "drone" and not robot["runtime"].is_attached():
-                robot["runtime"].attach_drone()
-
-        self._restore_base_poses()
-
         if self._physx_sub is None:
             self._physx_iface = physx.get_physx_interface()
             try:
@@ -442,11 +429,28 @@ class Extension(omni.ext.IExt):
                 )
             except Exception as e:
                 log(f"Physx subscribe failed: {e}", 3)
+                return
+
+        for robot in self.robots:
+            try:
+                if robot["kind"] == "spot" and robot.get("policy") is None:
+                    robot["policy"] = SpotFlatTerrainPolicy(
+                        prim_path=robot["path"],
+                        name=robot["name"],
+                        position=SPOT_BASE_POSITION,
+                    )
+                    robot["runtime"].attach_spot(robot["policy"])
+                    log(f"{robot['name']} policy attached", 2)
+                elif robot["kind"] == "drone" and not robot["runtime"].is_attached():
+                    robot["runtime"].attach_drone()
+                    log(f"{robot['name']} attached", 2)
+            except Exception as e:
+                log(f"{robot['name']} play init failed: {e}", 3)
+
+        self._restore_base_poses()
 
     def _on_world_physics_step(self, step_size: float):
         if not self._timeline.is_playing():
-            return
-        if self.task_runtime is None:
             return
 
         if self._task_reset_needed:
@@ -456,4 +460,5 @@ class Extension(omni.ext.IExt):
         for robot in self.robots:
             robot["runtime"].step(float(step_size))
 
-        self.task_runtime.step(float(step_size))
+        if self.task_runtime is not None:
+            self.task_runtime.step(float(step_size))

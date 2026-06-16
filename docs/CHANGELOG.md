@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+- Camera sensing now uses `isaacsim.sensors.camera` instead of direct Replicator annotators.
+
+### Fixed
+- Play crash and teleop failures caused by camera init running too early during Play attach.
+
 ## [1.0.3] - 2026-06-16
 ### Added
 - Dynamic stage root resolution (`defaultPrim`, PhysicsScene parent, then `/World` or `/Root`).

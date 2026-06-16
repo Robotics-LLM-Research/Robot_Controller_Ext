@@ -12,7 +12,6 @@ def stop_api_server(server) -> None:
     if server is None:
         return
     server.should_exit = True
-    server.force_exit = True
 
 def start_spot_api(
     cmd_q: "queue.Queue", 

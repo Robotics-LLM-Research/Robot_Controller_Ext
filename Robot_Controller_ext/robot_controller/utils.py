@@ -1,6 +1,7 @@
 # pyright: reportMissingImports=false
 import carb
 import math
+import numpy as np
 import omni.usd
 from pxr import UsdGeom, UsdPhysics
 
@@ -117,6 +118,17 @@ def _get_world_pose_xy_yaw(prim_path: str, allow_missing: bool = False):
     r = m.ExtractRotationMatrix()
     yaw = math.atan2(float(r[1][0]), float(r[0][0]))
     return x, y, z, yaw
+
+
+def _to_numpy(data):
+    if data is None:
+        return None
+    if isinstance(data, np.ndarray):
+        return data
+    try:
+        return np.asarray(data)
+    except Exception:
+        return None
 
 
 # ----- Other -----

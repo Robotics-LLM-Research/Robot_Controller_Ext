@@ -19,7 +19,7 @@ dist/
 # Isaac / Omniverse local cache
 .omniverse/
 logs/
-data/
+/data/
 cache/
 
 # VSCode
