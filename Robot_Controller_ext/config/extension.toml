@@ -1,13 +1,15 @@
 [package]
-version = "1.0.2"
+version = "1.0.3"
 category = "Simulation"
 title = "Robot Controller"
 description = "HTTP REST APIs for controlling robots in Isaac Sim."
-authors = ["NVIDIA"]
-repository = ""
+authors = ["Diego Pedroza"]
+repository = "https://github.com/Robotics-LLM-Research/Robot_Controller_Ext"
 keywords = []
 changelog = "../../docs/CHANGELOG.md"
-readme = "../../README.md"
+readme = "../../docs/README.md"
+icon = "data/icon.png"
+preview_image = "data/icon.png"
 writeTarget.kit = true
 
 [dependencies]

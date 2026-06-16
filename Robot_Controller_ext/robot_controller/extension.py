@@ -57,6 +57,7 @@ class Extension(omni.ext.IExt):
 
         # Log Flags
         self._last_logged_stage_root = None
+        self._play_logged = False
 
         # TImeline Subscription
         self._timeline = omni.timeline.get_timeline_interface()
@@ -88,6 +89,7 @@ class Extension(omni.ext.IExt):
         self.stage = None
         self.stage_root = None
         self._bound_stage_root = None
+        self._play_logged = False
 
     # ----- Services -----
     def _setup_services(self, discovered_robots):
@@ -276,6 +278,7 @@ class Extension(omni.ext.IExt):
         self.stage = None
         self.stage_root = None
         self._last_logged_stage_root = None
+        self._play_logged = False
         self.target_path = None
         self._physx_sub = None
 
@@ -294,13 +297,16 @@ class Extension(omni.ext.IExt):
     def _on_timeline_event(self, event):
         # Stop -> request reset for next Play
         if not self._timeline.is_playing():
+            self._play_logged = False
             for robot in self.robots:
                 robot["runtime"].request_reset()
             if self.task_runtime is not None:
                 self.task_runtime.request_reset()
             return
 
-        log("============================== PLAY ==============================", 2)
+        if not self._play_logged:
+            log("============================== PLAY ==============================", 2)
+            self._play_logged = True
         asyncio.ensure_future(self._init_after_play())
 
     def _request_task_reset(self):
