@@ -5,7 +5,7 @@ import urllib.request
 import pygame
 
 
-SPOT_API_BASE = "http://127.0.0.1:8001"
+SPOT_API_BASE = "http://127.0.0.1:8002"
 
 FORWARD_SPEED = 1.5
 TURN_SPEED = 1.2
