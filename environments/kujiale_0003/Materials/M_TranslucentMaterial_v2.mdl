@@ -1,0 +1,1073 @@
+﻿mdl 1.6;
+
+import ::math::*;
+import ::state::*;
+import ::tex::*;
+import ::anno::*;
+import ::scene::*;
+using .::OmniUe4Function import *;
+using .::OmniUe4Translucent import *;
+
+export annotation sampler_color();
+export annotation sampler_normal();
+export annotation sampler_grayscale();
+export annotation sampler_alpha();
+export annotation sampler_masks();
+export annotation sampler_distancefield();
+export annotation dither_masked_off();
+export annotation world_space_normal();
+
+export material M_TranslucentMaterial_v2(
+	float IsNormal = 0.0
+	[[
+		anno::display_name("IsNormal"),
+		anno::ui_order(32)
+	]],
+	float IsFlip = 0.0
+	[[
+		anno::display_name("IsFlip"),
+		anno::ui_order(32),
+		anno::in_group("Normal")
+	]],
+	uniform texture_2d NormalTex = texture_2d("./Textures/DefaultNormal.png",::tex::gamma_linear)
+	[[
+		anno::display_name("NormalTex"),
+		anno::ui_order(32),
+		anno::in_group("Normal"),
+		sampler_normal()
+	]],
+	float4 NormalUVW = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("NormalUVW"),
+		anno::ui_order(4),
+		anno::in_group("Normal")
+	]],
+	float4 NormalOffset = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("NormalOffset"),
+		anno::ui_order(5),
+		anno::in_group("Normal")
+	]],
+	float NormalIntensity = 0.0
+	[[
+		anno::display_name("NormalIntensity"),
+		anno::ui_order(32),
+		anno::in_group("Normal")
+	]],
+	float EmissionIsTexType = 0.0
+	[[
+		anno::display_name("EmissionIsTexType"),
+		anno::description("0 is color, 1 is tex, 2 is falloff
+"),
+		anno::ui_order(1),
+		anno::in_group("Emission")
+	]],
+	float EmissionFalloffValue1Type = 0.0
+	[[
+		anno::display_name("EmissionFalloffValue1Type"),
+		anno::ui_order(7),
+		anno::in_group("Emission")
+	]],
+	float EmissionFalloffFloat = 0.0
+	[[
+		anno::display_name("EmissionFalloffFloat"),
+		anno::ui_order(8),
+		anno::in_group("Emission")
+	]],
+	float4 EmissionColor = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("EmissionColor"),
+		anno::ui_order(2),
+		anno::in_group("Emission")
+	]],
+	uniform texture_2d EmissionTex = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("EmissionTex"),
+		anno::ui_order(3),
+		anno::in_group("Emission"),
+		sampler_color()
+	]],
+	float4 EmissionUVW = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("EmissionUVW"),
+		anno::ui_order(4),
+		anno::in_group("Emission")
+	]],
+	float4 EmissionOffset = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("EmissionOffset"),
+		anno::ui_order(5),
+		anno::in_group("Emission")
+	]],
+	float EmissionFalloffValue2Type = 0.0
+	[[
+		anno::display_name("EmissionFalloffValue2Type"),
+		anno::ui_order(9),
+		anno::in_group("Emission")
+	]],
+	float EmissionFalloffFloat_2 = 0.0
+	[[
+		anno::display_name("EmissionFalloffFloat_2"),
+		anno::ui_order(10),
+		anno::in_group("Emission")
+	]],
+	float4 EmissionColor_2 = float4(1.0,1.0,1.0,1.0)
+	[[
+		anno::display_name("EmissionColor_2"),
+		anno::ui_order(11),
+		anno::in_group("Emission")
+	]],
+	uniform texture_2d EmissionTex_2 = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("EmissionTex_2"),
+		anno::ui_order(12),
+		anno::in_group("Emission"),
+		sampler_color()
+	]],
+	float4 EmissionUVW_2 = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("EmissionUVW_2"),
+		anno::ui_order(13),
+		anno::in_group("Emission")
+	]],
+	float4 EmissionOffset_2 = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("EmissionOffset_2"),
+		anno::ui_order(14),
+		anno::in_group("Emission")
+	]],
+	float EmissionFalloffFreshnelIor = 1.6
+	[[
+		anno::display_name("EmissionFalloffFreshnelIor"),
+		anno::ui_order(6),
+		anno::in_group("Emission")
+	]],
+	float ColorIsTexType = 0.0
+	[[
+		anno::display_name("ColorIsTexType"),
+		anno::description("0 is color, 1 is tex, 2 is falloff
+"),
+		anno::ui_order(1),
+		anno::in_group("Color")
+	]],
+	float ColorFalloffValue1Type = 0.0
+	[[
+		anno::display_name("ColorFalloffValue1Type"),
+		anno::ui_order(7),
+		anno::in_group("Color")
+	]],
+	float ColorFalloffFloat = 0.0
+	[[
+		anno::display_name("ColorFalloffFloat"),
+		anno::ui_order(10),
+		anno::in_group("Color")
+	]],
+	float4 ColorColor = float4(1.0,1.0,1.0,1.0)
+	[[
+		anno::display_name("ColorColor"),
+		anno::ui_order(2),
+		anno::in_group("Color")
+	]],
+	uniform texture_2d ColorTex = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("ColorTex"),
+		anno::ui_order(3),
+		anno::in_group("Color"),
+		sampler_color()
+	]],
+	float4 ColorUVW = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("ColorUVW"),
+		anno::ui_order(4),
+		anno::in_group("Color")
+	]],
+	float4 ColorOffset = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("ColorOffset"),
+		anno::ui_order(5),
+		anno::in_group("Color")
+	]],
+	float ColorFalloffValue2Type = 0.0
+	[[
+		anno::display_name("ColorFalloffValue2Type"),
+		anno::ui_order(9),
+		anno::in_group("Color")
+	]],
+	float ColorFalloffFloat_2 = 0.0
+	[[
+		anno::display_name("ColorFalloffFloat_2"),
+		anno::ui_order(10),
+		anno::in_group("Color")
+	]],
+	float4 ColorColor_2 = float4(1.0,1.0,1.0,1.0)
+	[[
+		anno::display_name("ColorColor_2"),
+		anno::ui_order(11),
+		anno::in_group("Color")
+	]],
+	uniform texture_2d ColorTex_2 = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("ColorTex_2"),
+		anno::ui_order(12),
+		anno::in_group("Color"),
+		sampler_color()
+	]],
+	float4 ColorUVW_2 = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("ColorUVW_2"),
+		anno::ui_order(13),
+		anno::in_group("Color")
+	]],
+	float4 ColorOffset_2 = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("ColorOffset_2"),
+		anno::ui_order(14),
+		anno::in_group("Color")
+	]],
+	float ColorFalloffFreshnelIor = 1.6
+	[[
+		anno::display_name("ColorFalloffFreshnelIor"),
+		anno::ui_order(6),
+		anno::in_group("Color")
+	]],
+	float MetallicIsTexType = 0.0
+	[[
+		anno::display_name("MetallicIsTexType"),
+		anno::description("0 is color, 1 is tex, 2 is falloff
+"),
+		anno::ui_order(1),
+		anno::in_group("Metallic")
+	]],
+	float MetallicFalloffValue1Type = 0.0
+	[[
+		anno::display_name("MetallicFalloffValue1Type"),
+		anno::ui_order(7),
+		anno::in_group("Metallic")
+	]],
+	float MetallicFalloffFloat = 0.0
+	[[
+		anno::display_name("MetallicFalloffFloat"),
+		anno::ui_order(8),
+		anno::in_group("Metallic")
+	]],
+	float MetallicFloat = 0.0
+	[[
+		anno::display_name("MetallicFloat"),
+		anno::ui_order(2),
+		anno::in_group("Metallic")
+	]],
+	uniform texture_2d MetallicTex = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("MetallicTex"),
+		anno::ui_order(3),
+		anno::in_group("Metallic"),
+		sampler_color()
+	]],
+	float4 MetallicUVW = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("MetallicUVW"),
+		anno::ui_order(4),
+		anno::in_group("Metallic")
+	]],
+	float4 MetallicOffset = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("MetallicOffset"),
+		anno::ui_order(5),
+		anno::in_group("Metallic")
+	]],
+	float MetallicFalloffValue2Type = 0.0
+	[[
+		anno::display_name("MetallicFalloffValue2Type"),
+		anno::ui_order(9),
+		anno::in_group("Metallic")
+	]],
+	float MetallicFalloffFloat_2 = 0.0
+	[[
+		anno::display_name("MetallicFalloffFloat_2"),
+		anno::ui_order(10),
+		anno::in_group("Metallic")
+	]],
+	float4 MetallicColor_2 = float4(1.0,1.0,1.0,1.0)
+	[[
+		anno::display_name("MetallicColor_2"),
+		anno::ui_order(11),
+		anno::in_group("Metallic")
+	]],
+	uniform texture_2d MetallicTex_2 = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("MetallicTex_2"),
+		anno::ui_order(12),
+		anno::in_group("Metallic"),
+		sampler_color()
+	]],
+	float4 MetallicUVW_2 = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("MetallicUVW_2"),
+		anno::ui_order(13),
+		anno::in_group("Metallic")
+	]],
+	float4 MetallicOffset_2 = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("MetallicOffset_2"),
+		anno::ui_order(14),
+		anno::in_group("Metallic")
+	]],
+	float MetallicFalloffFreshnelIor = 1.6
+	[[
+		anno::display_name("MetallicFalloffFreshnelIor"),
+		anno::ui_order(6),
+		anno::in_group("Metallic")
+	]],
+	float SpecularIsTexType = 0.0
+	[[
+		anno::display_name("SpecularIsTexType"),
+		anno::description("0 is color, 1 is tex, 2 is falloff
+"),
+		anno::ui_order(1),
+		anno::in_group("Specular")
+	]],
+	float SpecularFalloffValue1Type = 0.0
+	[[
+		anno::display_name("SpecularFalloffValue1Type"),
+		anno::ui_order(7),
+		anno::in_group("Specular")
+	]],
+	float SpecularFalloffFloat = 0.0
+	[[
+		anno::display_name("SpecularFalloffFloat"),
+		anno::ui_order(8),
+		anno::in_group("Specular")
+	]],
+	float SpecularFloat = 0.0
+	[[
+		anno::display_name("SpecularFloat"),
+		anno::ui_order(2),
+		anno::in_group("Specular")
+	]],
+	uniform texture_2d SpecularTex = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("SpecularTex"),
+		anno::ui_order(3),
+		anno::in_group("Specular"),
+		sampler_color()
+	]],
+	float4 SpecularUVW = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("SpecularUVW"),
+		anno::ui_order(4),
+		anno::in_group("Specular")
+	]],
+	float4 SpecularOffset = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("SpecularOffset"),
+		anno::ui_order(5),
+		anno::in_group("Specular")
+	]],
+	float SpecularFalloffValue2Type = 0.0
+	[[
+		anno::display_name("SpecularFalloffValue2Type"),
+		anno::ui_order(9),
+		anno::in_group("Specular")
+	]],
+	float SpecularFalloffFloat_2 = 0.0
+	[[
+		anno::display_name("SpecularFalloffFloat_2"),
+		anno::ui_order(10),
+		anno::in_group("Specular")
+	]],
+	float4 SpecularColor_2 = float4(1.0,1.0,1.0,1.0)
+	[[
+		anno::display_name("SpecularColor_2"),
+		anno::ui_order(11),
+		anno::in_group("Specular")
+	]],
+	uniform texture_2d SpecularTex_2 = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("SpecularTex_2"),
+		anno::ui_order(12),
+		anno::in_group("Specular"),
+		sampler_color()
+	]],
+	float4 SpecularUVW_2 = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("SpecularUVW_2"),
+		anno::ui_order(13),
+		anno::in_group("Specular")
+	]],
+	float4 SpecularOffset_2 = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("SpecularOffset_2"),
+		anno::ui_order(14),
+		anno::in_group("Specular")
+	]],
+	float SpecularFalloffFreshnelIor = 1.6
+	[[
+		anno::display_name("SpecularFalloffFreshnelIor"),
+		anno::ui_order(6),
+		anno::in_group("Specular")
+	]],
+	float RoughnessIsTexType = 0.0
+	[[
+		anno::display_name("RoughnessIsTexType"),
+		anno::description("0 is color, 1 is tex, 2 is falloff
+"),
+		anno::ui_order(1),
+		anno::in_group("Roughness")
+	]],
+	float RoughnessFalloffValue1Type = 0.0
+	[[
+		anno::display_name("RoughnessFalloffValue1Type"),
+		anno::ui_order(7),
+		anno::in_group("Roughness")
+	]],
+	float RoughnessFalloffFloat = 0.0
+	[[
+		anno::display_name("RoughnessFalloffFloat"),
+		anno::ui_order(8),
+		anno::in_group("Roughness")
+	]],
+	float RoughnessFloat = 0.0
+	[[
+		anno::display_name("RoughnessFloat"),
+		anno::ui_order(2),
+		anno::in_group("Roughness")
+	]],
+	uniform texture_2d RoughnessTex = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("RoughnessTex"),
+		anno::ui_order(3),
+		anno::in_group("Roughness"),
+		sampler_color()
+	]],
+	float4 RoughnessUVW = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("RoughnessUVW"),
+		anno::ui_order(4),
+		anno::in_group("Roughness")
+	]],
+	float4 RoughnessOffset = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("RoughnessOffset"),
+		anno::ui_order(5),
+		anno::in_group("Roughness")
+	]],
+	float RoughnessFalloffValue2Type = 0.0
+	[[
+		anno::display_name("RoughnessFalloffValue2Type"),
+		anno::ui_order(9),
+		anno::in_group("Roughness")
+	]],
+	float RoughnessFalloffFloat_2 = 0.0
+	[[
+		anno::display_name("RoughnessFalloffFloat_2"),
+		anno::ui_order(10),
+		anno::in_group("Roughness")
+	]],
+	float4 RoughnessColor_2 = float4(1.0,1.0,1.0,1.0)
+	[[
+		anno::display_name("RoughnessColor_2"),
+		anno::ui_order(11),
+		anno::in_group("Roughness")
+	]],
+	uniform texture_2d RoughnessTex_2 = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("RoughnessTex_2"),
+		anno::ui_order(12),
+		anno::in_group("Roughness"),
+		sampler_color()
+	]],
+	float4 RoughnessUVW_2 = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("RoughnessUVW_2"),
+		anno::ui_order(13),
+		anno::in_group("Roughness")
+	]],
+	float4 RoughnessOffset_2 = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("RoughnessOffset_2"),
+		anno::ui_order(14),
+		anno::in_group("Roughness")
+	]],
+	float RoughnessFalloffFreshnelIor = 1.6
+	[[
+		anno::display_name("RoughnessFalloffFreshnelIor"),
+		anno::ui_order(6),
+		anno::in_group("Roughness")
+	]],
+	float OpacityIsTexType = 0.0
+	[[
+		anno::display_name("OpacityIsTexType"),
+		anno::description("0 is float, 1 is tex, 2 is falloff
+"),
+		anno::ui_order(1),
+		anno::in_group("Opacity")
+	]],
+	float OpacityFalloffValue1Type = 0.0
+	[[
+		anno::display_name("OpacityFalloffValue1Type"),
+		anno::ui_order(7),
+		anno::in_group("Opacity")
+	]],
+	float OpacityFalloffFloat = 0.0
+	[[
+		anno::display_name("OpacityFalloffFloat"),
+		anno::ui_order(8),
+		anno::in_group("Opacity")
+	]],
+	float OpacityFloat = 0.0
+	[[
+		anno::display_name("OpacityFloat"),
+		anno::ui_order(2),
+		anno::in_group("Opacity")
+	]],
+	uniform texture_2d OpacityTex = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("OpacityTex"),
+		anno::ui_order(3),
+		anno::in_group("Opacity"),
+		sampler_color()
+	]],
+	float4 OpacityUVW = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("OpacityUVW"),
+		anno::ui_order(4),
+		anno::in_group("Opacity")
+	]],
+	float4 OpacityOffset = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("OpacityOffset"),
+		anno::ui_order(5),
+		anno::in_group("Opacity")
+	]],
+	float OpacityFalloffValue2Type = 0.0
+	[[
+		anno::display_name("OpacityFalloffValue2Type"),
+		anno::ui_order(9),
+		anno::in_group("Opacity")
+	]],
+	float OpacityFalloffFloat_2 = 0.0
+	[[
+		anno::display_name("OpacityFalloffFloat_2"),
+		anno::ui_order(10),
+		anno::in_group("Opacity")
+	]],
+	float4 OpacityColor_2 = float4(1.0,1.0,1.0,1.0)
+	[[
+		anno::display_name("OpacityColor_2"),
+		anno::ui_order(11),
+		anno::in_group("Opacity")
+	]],
+	uniform texture_2d OpacityTex_2 = texture_2d("./Textures/DefaultTexture.png",::tex::gamma_srgb)
+	[[
+		anno::display_name("OpacityTex_2"),
+		anno::ui_order(12),
+		anno::in_group("Opacity"),
+		sampler_color()
+	]],
+	float4 OpacityUVW_2 = float4(1.0,1.0,0.0,1.0)
+	[[
+		anno::display_name("OpacityUVW_2"),
+		anno::ui_order(13),
+		anno::in_group("Opacity")
+	]],
+	float4 OpacityOffset_2 = float4(0.0,0.0,0.0,1.0)
+	[[
+		anno::display_name("OpacityOffset_2"),
+		anno::ui_order(14),
+		anno::in_group("Opacity")
+	]],
+	float OpacityFalloffFreshnelIor = 1.6
+	[[
+		anno::display_name("OpacityFalloffFreshnelIor"),
+		anno::ui_order(6),
+		anno::in_group("Opacity")
+	]],
+	float PolygonOffset = 0.0
+	[[
+		anno::display_name("PolygonOffset"),
+		anno::ui_order(32)
+	]],
+	int MaxTexCoordIndex = 3
+	[[
+		anno::hidden()
+	]])
+ = 
+	let {
+	float3 Local437 = ::camera_position();
+	float3 Local438 = (Local437 - (::convert_to_left_hand(state::transform_point(state::coordinate_internal,state::coordinate_world,state::position()), true)*state::meters_per_scene_unit()*100.0));
+	float3 Local439 = math::normalize(Local438);
+	float3 Local440 = (Local439 * PolygonOffset);
+
+	float3 WorldPositionOffset_mdl = Local440;
+	float2 CustomizedUV0_mdl = float2(state::texture_coordinate(math::min(0,MaxTexCoordIndex)).x,1.0-state::texture_coordinate(math::min(0,MaxTexCoordIndex)).y);
+	float2 CustomizedUV1_mdl = float2(state::texture_coordinate(math::min(1,MaxTexCoordIndex)).x,1.0-state::texture_coordinate(math::min(1,MaxTexCoordIndex)).y);
+	float2 CustomizedUV2_mdl = float2(state::texture_coordinate(math::min(2,MaxTexCoordIndex)).x,1.0-state::texture_coordinate(math::min(2,MaxTexCoordIndex)).y);
+	float2 CustomizedUV3_mdl = float2(state::texture_coordinate(math::min(3,MaxTexCoordIndex)).x,1.0-state::texture_coordinate(math::min(3,MaxTexCoordIndex)).y);
+	float2 CustomizedUV4_mdl = float2(state::texture_coordinate(math::min(4,MaxTexCoordIndex)).x,1.0-state::texture_coordinate(math::min(4,MaxTexCoordIndex)).y);
+	float2 CustomizedUV5_mdl = float2(state::texture_coordinate(math::min(5,MaxTexCoordIndex)).x,1.0-state::texture_coordinate(math::min(5,MaxTexCoordIndex)).y);
+	float2 CustomizedUV6_mdl = float2(state::texture_coordinate(math::min(6,MaxTexCoordIndex)).x,1.0-state::texture_coordinate(math::min(6,MaxTexCoordIndex)).y);
+
+	float2 Local0 = (float2(0.5,0.5) * -1.0);
+	float Local1 = math::min(math::max(0.0,0.0),6.0);
+	float2 Local2 = ((math::abs(Local1 - 1.0) > 0.00001) ? (Local1 >= 1.0 ? CustomizedUV2_mdl : CustomizedUV0_mdl) : CustomizedUV1_mdl);
+	float2 Local3 = ((math::abs(Local1 - 3.0) > 0.00001) ? (Local1 >= 3.0 ? CustomizedUV4_mdl : Local2) : CustomizedUV3_mdl);
+	float2 Local4 = ((math::abs(Local1 - 5.0) > 0.00001) ? (Local1 >= 5.0 ? CustomizedUV6_mdl : Local3) : CustomizedUV5_mdl);
+	float Local5 = (Local4.x * float3(NormalUVW.x,NormalUVW.y,NormalUVW.z).x);
+	float Local6 = (Local4.y * float3(NormalUVW.x,NormalUVW.y,NormalUVW.z).y);
+	float Local7 = (1.0 - float3(NormalUVW.x,NormalUVW.y,NormalUVW.z).y);
+	float Local8 = (Local6 + Local7);
+	float Local9 = (float2(Local5,Local8).x + float3(NormalOffset.x,NormalOffset.y,NormalOffset.z).x);
+	float Local10 = (float3(NormalOffset.x,NormalOffset.y,NormalOffset.z).y * -1.0);
+	float Local11 = (float2(Local5,Local8).y + Local10);
+	float2 Local12 = (Local0 + float2(Local9,Local11));
+	float Local13 = (float3(NormalUVW.x,NormalUVW.y,NormalUVW.z).z * 6.283185);
+	float Local14 = math::cos(Local13);
+	float Local15 = math::sin(Local13);
+	float Local16 = (Local15 * -1.0);
+	float Local17 = math::dot(Local12, float2(Local14,Local16));
+	float Local18 = math::dot(Local12, float2(Local15,Local14));
+	float2 Local19 = (float2(0.5,0.5) + float2(Local17,Local18));
+	float4 Local20 = ::unpack_normal_map(tex::lookup_float4(NormalTex,float2(Local19.x,1.0-Local19.y),tex::wrap_repeat,tex::wrap_repeat));
+	float2 Local21 = (float2(float3(Local20.x,Local20.y,Local20.z).x,float3(Local20.x,Local20.y,Local20.z).y) * NormalIntensity);
+	float3 Local22 = math::normalize(float3(Local21.x,Local21.y,float3(Local20.x,Local20.y,Local20.z).z));
+	float3 Local23 = ((math::abs(IsFlip - 1.0) > 0.00001) ? (Local22) : Local22);
+	float Local24 = (Local23.z + 1.0);
+	float2 Local25 = (float2(float3(0.0,0.0,1.0).x,float3(0.0,0.0,1.0).y) * -1.0);
+	float Local26 = math::dot(float3(float2(Local23.x,Local23.y).x,float2(Local23.x,Local23.y).y,Local24), float3(Local25.x,Local25.y,float3(0.0,0.0,1.0).z));
+	float3 Local27 = (float3(float2(Local23.x,Local23.y).x,float2(Local23.x,Local23.y).y,Local24) * Local26);
+	float3 Local28 = (Local24 * float3(Local25.x,Local25.y,float3(0.0,0.0,1.0).z));
+	float3 Local29 = (Local27 - Local28);
+	float3 Local30 = math::normalize(Local29);
+	float3 Local31 = ((math::abs(IsNormal - 1.0) > 0.00001) ? (float3(0.0,0.0,1.0)) : Local30);
+
+	float3 Normal_mdl = Local31;
+
+	float Local32 = (Local4.x * float3(EmissionUVW.x,EmissionUVW.y,EmissionUVW.z).x);
+	float Local33 = (Local4.y * float3(EmissionUVW.x,EmissionUVW.y,EmissionUVW.z).y);
+	float Local34 = (1.0 - float3(EmissionUVW.x,EmissionUVW.y,EmissionUVW.z).y);
+	float Local35 = (Local33 + Local34);
+	float Local36 = (float2(Local32,Local35).x + float3(EmissionOffset.x,EmissionOffset.y,EmissionOffset.z).x);
+	float Local37 = (float3(EmissionOffset.x,EmissionOffset.y,EmissionOffset.z).y * -1.0);
+	float Local38 = (float2(Local32,Local35).y + Local37);
+	float2 Local39 = (Local0 + float2(Local36,Local38));
+	float Local40 = (float3(EmissionUVW.x,EmissionUVW.y,EmissionUVW.z).z * 6.283185);
+	float Local41 = math::cos(Local40);
+	float Local42 = math::sin(Local40);
+	float Local43 = (Local42 * -1.0);
+	float Local44 = math::dot(Local39, float2(Local41,Local43));
+	float Local45 = math::dot(Local39, float2(Local42,Local41));
+	float2 Local46 = (float2(0.5,0.5) + float2(Local44,Local45));
+	float4 Local47 = tex::lookup_float4(EmissionTex,float2(Local46.x,1.0-Local46.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local48 = ((math::abs(EmissionFalloffValue1Type - 1.0) > 0.00001) ? (EmissionFalloffValue1Type >= 1.0 ? float3(float2(EmissionFalloffFloat,EmissionFalloffFloat).x,float2(EmissionFalloffFloat,EmissionFalloffFloat).y,EmissionFalloffFloat) : float3(EmissionColor.x,EmissionColor.y,EmissionColor.z)) : float3(Local47.x,Local47.y,Local47.z));
+	float Local49 = (Local4.x * float3(EmissionUVW_2.x,EmissionUVW_2.y,EmissionUVW_2.z).x);
+	float Local50 = (Local4.y * float3(EmissionUVW_2.x,EmissionUVW_2.y,EmissionUVW_2.z).y);
+	float Local51 = (1.0 - float3(EmissionUVW_2.x,EmissionUVW_2.y,EmissionUVW_2.z).y);
+	float Local52 = (Local50 + Local51);
+	float Local53 = (float2(Local49,Local52).x + float3(EmissionOffset_2.x,EmissionOffset_2.y,EmissionOffset_2.z).x);
+	float Local54 = (float3(EmissionOffset_2.x,EmissionOffset_2.y,EmissionOffset_2.z).y * -1.0);
+	float Local55 = (float2(Local49,Local52).y + Local54);
+	float2 Local56 = (Local0 + float2(Local53,Local55));
+	float Local57 = (float3(EmissionUVW_2.x,EmissionUVW_2.y,EmissionUVW_2.z).z * 6.283185);
+	float Local58 = math::cos(Local57);
+	float Local59 = math::sin(Local57);
+	float Local60 = (Local59 * -1.0);
+	float Local61 = math::dot(Local56, float2(Local58,Local60));
+	float Local62 = math::dot(Local56, float2(Local59,Local58));
+	float2 Local63 = (float2(0.5,0.5) + float2(Local61,Local62));
+	float4 Local64 = tex::lookup_float4(EmissionTex_2,float2(Local63.x,1.0-Local63.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local65 = ((math::abs(EmissionFalloffValue2Type - 1.0) > 0.00001) ? (EmissionFalloffValue2Type >= 1.0 ? float3(float2(EmissionFalloffFloat_2,EmissionFalloffFloat_2).x,float2(EmissionFalloffFloat_2,EmissionFalloffFloat_2).y,EmissionFalloffFloat_2) : float3(EmissionColor_2.x,EmissionColor_2.y,EmissionColor_2.z)) : float3(Local64.x,Local64.y,Local64.z));
+	float Local66 = math::min(math::max(EmissionFalloffFreshnelIor,0.0),100.0);
+	float Local67 = (1.0 / Local66);
+	float Local68 = math::max(Local66,Local67);
+	float Local69 = (Local68 - 1.0);
+	float Local70 = (Local68 * Local68);
+	float Local71 = math::dot(::pixel_normal_world_space(true), ::camera_vector(true));
+	float Local72 = (Local71 * Local71);
+	float Local73 = (Local70 + Local72);
+	float Local74 = (Local73 - 1.0);
+	float Local75 = math::sqrt(Local74);
+	float Local76 = (Local75 / Local68);
+	float Local77 = ((math::abs(Local76 - 0.99999) > 0.000001) ? (Local76 >= 0.99999 ? 1.0 : 0.0) : 0.0);
+	float Local78 = ((math::abs(Local71 - 0.99999) > 0.000001) ? (Local71 >= 0.99999 ? 1.0 : 0.0) : 0.0);
+	float Local79 = math::max(Local77,Local78);
+	float Local80 = (Local71 / Local76);
+	float Local81 = (Local68 * Local80);
+	float Local82 = (Local81 - 1.0);
+	float Local83 = (Local81 + 1.0);
+	float Local84 = (Local82 / Local83);
+	float Local85 = math::pow(math::max(Local84,float(0.000001)),2.0);
+	float Local86 = (Local76 / Local71);
+	float Local87 = (Local68 * Local86);
+	float Local88 = (Local87 - 1.0);
+	float Local89 = (Local87 + 1.0);
+	float Local90 = (Local88 / Local89);
+	float Local91 = math::pow(math::max(Local90,float(0.000001)),2.0);
+	float Local92 = (Local85 + Local91);
+	float Local93 = (Local92 * 0.5);
+	float Local94 = (Local68 + 1.0);
+	float Local95 = (Local69 / Local94);
+	float Local96 = math::pow(math::max(Local95,float(0.000001)),2.0);
+	float Local97 = ((math::abs(Local79 - 1.0) > 0.1) ? (Local93) : Local96);
+	float Local98 = ((math::abs(Local69 - 0.0) > 0.000001) ? (Local97) : 0.0);
+	float Local99 = math::saturate(Local98);
+	float3 Local100 = math::lerp(Local48,Local65,Local99);
+	float3 Local101 = ((math::abs(EmissionIsTexType - 1.0) > 0.00001) ? (EmissionIsTexType >= 1.0 ? Local100 : float3(EmissionColor.x,EmissionColor.y,EmissionColor.z)) : float3(Local47.x,Local47.y,Local47.z));
+	float Local102 = (Local4.x * float3(ColorUVW.x,ColorUVW.y,ColorUVW.z).x);
+	float Local103 = (Local4.y * float3(ColorUVW.x,ColorUVW.y,ColorUVW.z).y);
+	float Local104 = (1.0 - float3(ColorUVW.x,ColorUVW.y,ColorUVW.z).y);
+	float Local105 = (Local103 + Local104);
+	float Local106 = (float2(Local102,Local105).x + float3(ColorOffset.x,ColorOffset.y,ColorOffset.z).x);
+	float Local107 = (float3(ColorOffset.x,ColorOffset.y,ColorOffset.z).y * -1.0);
+	float Local108 = (float2(Local102,Local105).y + Local107);
+	float2 Local109 = (Local0 + float2(Local106,Local108));
+	float Local110 = (float3(ColorUVW.x,ColorUVW.y,ColorUVW.z).z * 6.283185);
+	float Local111 = math::cos(Local110);
+	float Local112 = math::sin(Local110);
+	float Local113 = (Local112 * -1.0);
+	float Local114 = math::dot(Local109, float2(Local111,Local113));
+	float Local115 = math::dot(Local109, float2(Local112,Local111));
+	float2 Local116 = (float2(0.5,0.5) + float2(Local114,Local115));
+	float4 Local117 = tex::lookup_float4(ColorTex,float2(Local116.x,1.0-Local116.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local118 = ((math::abs(ColorFalloffValue1Type - 1.0) > 0.00001) ? (ColorFalloffValue1Type >= 1.0 ? float3(float2(ColorFalloffFloat,ColorFalloffFloat).x,float2(ColorFalloffFloat,ColorFalloffFloat).y,ColorFalloffFloat) : float3(ColorColor.x,ColorColor.y,ColorColor.z)) : float3(Local117.x,Local117.y,Local117.z));
+	float Local119 = (Local4.x * float3(ColorUVW_2.x,ColorUVW_2.y,ColorUVW_2.z).x);
+	float Local120 = (Local4.y * float3(ColorUVW_2.x,ColorUVW_2.y,ColorUVW_2.z).y);
+	float Local121 = (1.0 - float3(ColorUVW_2.x,ColorUVW_2.y,ColorUVW_2.z).y);
+	float Local122 = (Local120 + Local121);
+	float Local123 = (float2(Local119,Local122).x + float3(ColorOffset_2.x,ColorOffset_2.y,ColorOffset_2.z).x);
+	float Local124 = (float3(ColorOffset_2.x,ColorOffset_2.y,ColorOffset_2.z).y * -1.0);
+	float Local125 = (float2(Local119,Local122).y + Local124);
+	float2 Local126 = (Local0 + float2(Local123,Local125));
+	float Local127 = (float3(ColorUVW_2.x,ColorUVW_2.y,ColorUVW_2.z).z * 6.283185);
+	float Local128 = math::cos(Local127);
+	float Local129 = math::sin(Local127);
+	float Local130 = (Local129 * -1.0);
+	float Local131 = math::dot(Local126, float2(Local128,Local130));
+	float Local132 = math::dot(Local126, float2(Local129,Local128));
+	float2 Local133 = (float2(0.5,0.5) + float2(Local131,Local132));
+	float4 Local134 = tex::lookup_float4(ColorTex_2,float2(Local133.x,1.0-Local133.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local135 = ((math::abs(ColorFalloffValue2Type - 1.0) > 0.00001) ? (ColorFalloffValue2Type >= 1.0 ? float3(float2(ColorFalloffFloat_2,ColorFalloffFloat_2).x,float2(ColorFalloffFloat_2,ColorFalloffFloat_2).y,ColorFalloffFloat_2) : float3(ColorColor_2.x,ColorColor_2.y,ColorColor_2.z)) : float3(Local134.x,Local134.y,Local134.z));
+	float Local136 = math::min(math::max(ColorFalloffFreshnelIor,0.0),100.0);
+	float Local137 = (1.0 / Local136);
+	float Local138 = math::max(Local136,Local137);
+	float Local139 = (Local138 - 1.0);
+	float Local140 = (Local138 * Local138);
+	float Local141 = (Local140 + Local72);
+	float Local142 = (Local141 - 1.0);
+	float Local143 = math::sqrt(Local142);
+	float Local144 = (Local143 / Local138);
+	float Local145 = ((math::abs(Local144 - 0.99999) > 0.000001) ? (Local144 >= 0.99999 ? 1.0 : 0.0) : 0.0);
+	float Local146 = math::max(Local145,Local78);
+	float Local147 = (Local71 / Local144);
+	float Local148 = (Local138 * Local147);
+	float Local149 = (Local148 - 1.0);
+	float Local150 = (Local148 + 1.0);
+	float Local151 = (Local149 / Local150);
+	float Local152 = math::pow(math::max(Local151,float(0.000001)),2.0);
+	float Local153 = (Local144 / Local71);
+	float Local154 = (Local138 * Local153);
+	float Local155 = (Local154 - 1.0);
+	float Local156 = (Local154 + 1.0);
+	float Local157 = (Local155 / Local156);
+	float Local158 = math::pow(math::max(Local157,float(0.000001)),2.0);
+	float Local159 = (Local152 + Local158);
+	float Local160 = (Local159 * 0.5);
+	float Local161 = (Local138 + 1.0);
+	float Local162 = (Local139 / Local161);
+	float Local163 = math::pow(math::max(Local162,float(0.000001)),2.0);
+	float Local164 = ((math::abs(Local146 - 1.0) > 0.1) ? (Local160) : Local163);
+	float Local165 = ((math::abs(Local139 - 0.0) > 0.000001) ? (Local164) : 0.0);
+	float Local166 = math::saturate(Local165);
+	float3 Local167 = math::lerp(Local118,Local135,Local166);
+	float3 Local168 = ((math::abs(ColorIsTexType - 1.0) > 0.00001) ? (ColorIsTexType >= 1.0 ? Local167 : float3(ColorColor.x,ColorColor.y,ColorColor.z)) : float3(Local117.x,Local117.y,Local117.z));
+	float Local169 = (Local4.x * float3(MetallicUVW.x,MetallicUVW.y,MetallicUVW.z).x);
+	float Local170 = (Local4.y * float3(MetallicUVW.x,MetallicUVW.y,MetallicUVW.z).y);
+	float Local171 = (1.0 - float3(MetallicUVW.x,MetallicUVW.y,MetallicUVW.z).y);
+	float Local172 = (Local170 + Local171);
+	float Local173 = (float2(Local169,Local172).x + float3(MetallicOffset.x,MetallicOffset.y,MetallicOffset.z).x);
+	float Local174 = (float3(MetallicOffset.x,MetallicOffset.y,MetallicOffset.z).y * -1.0);
+	float Local175 = (float2(Local169,Local172).y + Local174);
+	float2 Local176 = (Local0 + float2(Local173,Local175));
+	float Local177 = (float3(MetallicUVW.x,MetallicUVW.y,MetallicUVW.z).z * 6.283185);
+	float Local178 = math::cos(Local177);
+	float Local179 = math::sin(Local177);
+	float Local180 = (Local179 * -1.0);
+	float Local181 = math::dot(Local176, float2(Local178,Local180));
+	float Local182 = math::dot(Local176, float2(Local179,Local178));
+	float2 Local183 = (float2(0.5,0.5) + float2(Local181,Local182));
+	float4 Local184 = tex::lookup_float4(MetallicTex,float2(Local183.x,1.0-Local183.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local185 = ((math::abs(MetallicFalloffValue1Type - 1.0) > 0.00001) ? (MetallicFalloffValue1Type >= 1.0 ? float3(float2(MetallicFalloffFloat,MetallicFalloffFloat).x,float2(MetallicFalloffFloat,MetallicFalloffFloat).y,MetallicFalloffFloat) : float3(float2(MetallicFloat,MetallicFloat).x,float2(MetallicFloat,MetallicFloat).y,MetallicFloat)) : float3(Local184.x,Local184.y,Local184.z));
+	float Local186 = (Local4.x * float3(MetallicUVW_2.x,MetallicUVW_2.y,MetallicUVW_2.z).x);
+	float Local187 = (Local4.y * float3(MetallicUVW_2.x,MetallicUVW_2.y,MetallicUVW_2.z).y);
+	float Local188 = (1.0 - float3(MetallicUVW_2.x,MetallicUVW_2.y,MetallicUVW_2.z).y);
+	float Local189 = (Local187 + Local188);
+	float Local190 = (float2(Local186,Local189).x + float3(MetallicOffset_2.x,MetallicOffset_2.y,MetallicOffset_2.z).x);
+	float Local191 = (float3(MetallicOffset_2.x,MetallicOffset_2.y,MetallicOffset_2.z).y * -1.0);
+	float Local192 = (float2(Local186,Local189).y + Local191);
+	float2 Local193 = (Local0 + float2(Local190,Local192));
+	float Local194 = (float3(MetallicUVW_2.x,MetallicUVW_2.y,MetallicUVW_2.z).z * 6.283185);
+	float Local195 = math::cos(Local194);
+	float Local196 = math::sin(Local194);
+	float Local197 = (Local196 * -1.0);
+	float Local198 = math::dot(Local193, float2(Local195,Local197));
+	float Local199 = math::dot(Local193, float2(Local196,Local195));
+	float2 Local200 = (float2(0.5,0.5) + float2(Local198,Local199));
+	float4 Local201 = tex::lookup_float4(MetallicTex_2,float2(Local200.x,1.0-Local200.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local202 = ((math::abs(MetallicFalloffValue2Type - 1.0) > 0.00001) ? (MetallicFalloffValue2Type >= 1.0 ? float3(float2(MetallicFalloffFloat_2,MetallicFalloffFloat_2).x,float2(MetallicFalloffFloat_2,MetallicFalloffFloat_2).y,MetallicFalloffFloat_2) : float3(MetallicColor_2.x,MetallicColor_2.y,MetallicColor_2.z)) : float3(Local201.x,Local201.y,Local201.z));
+	float Local203 = math::min(math::max(MetallicFalloffFreshnelIor,0.0),100.0);
+	float Local204 = (1.0 / Local203);
+	float Local205 = math::max(Local203,Local204);
+	float Local206 = (Local205 - 1.0);
+	float Local207 = (Local205 * Local205);
+	float Local208 = (Local207 + Local72);
+	float Local209 = (Local208 - 1.0);
+	float Local210 = math::sqrt(Local209);
+	float Local211 = (Local210 / Local205);
+	float Local212 = ((math::abs(Local211 - 0.99999) > 0.000001) ? (Local211 >= 0.99999 ? 1.0 : 0.0) : 0.0);
+	float Local213 = math::max(Local212,Local78);
+	float Local214 = (Local71 / Local211);
+	float Local215 = (Local205 * Local214);
+	float Local216 = (Local215 - 1.0);
+	float Local217 = (Local215 + 1.0);
+	float Local218 = (Local216 / Local217);
+	float Local219 = math::pow(math::max(Local218,float(0.000001)),2.0);
+	float Local220 = (Local211 / Local71);
+	float Local221 = (Local205 * Local220);
+	float Local222 = (Local221 - 1.0);
+	float Local223 = (Local221 + 1.0);
+	float Local224 = (Local222 / Local223);
+	float Local225 = math::pow(math::max(Local224,float(0.000001)),2.0);
+	float Local226 = (Local219 + Local225);
+	float Local227 = (Local226 * 0.5);
+	float Local228 = (Local205 + 1.0);
+	float Local229 = (Local206 / Local228);
+	float Local230 = math::pow(math::max(Local229,float(0.000001)),2.0);
+	float Local231 = ((math::abs(Local213 - 1.0) > 0.1) ? (Local227) : Local230);
+	float Local232 = ((math::abs(Local206 - 0.0) > 0.000001) ? (Local231) : 0.0);
+	float Local233 = math::saturate(Local232);
+	float3 Local234 = math::lerp(Local185,Local202,Local233);
+	float3 Local235 = ((math::abs(MetallicIsTexType - 1.0) > 0.00001) ? (MetallicIsTexType >= 1.0 ? Local234 : float3(float2(MetallicFloat,MetallicFloat).x,float2(MetallicFloat,MetallicFloat).y,MetallicFloat)) : float3(Local184.x,Local184.y,Local184.z));
+	float Local236 = (Local4.x * float3(SpecularUVW.x,SpecularUVW.y,SpecularUVW.z).x);
+	float Local237 = (Local4.y * float3(SpecularUVW.x,SpecularUVW.y,SpecularUVW.z).y);
+	float Local238 = (1.0 - float3(SpecularUVW.x,SpecularUVW.y,SpecularUVW.z).y);
+	float Local239 = (Local237 + Local238);
+	float Local240 = (float2(Local236,Local239).x + float3(SpecularOffset.x,SpecularOffset.y,SpecularOffset.z).x);
+	float Local241 = (float3(SpecularOffset.x,SpecularOffset.y,SpecularOffset.z).y * -1.0);
+	float Local242 = (float2(Local236,Local239).y + Local241);
+	float2 Local243 = (Local0 + float2(Local240,Local242));
+	float Local244 = (float3(SpecularUVW.x,SpecularUVW.y,SpecularUVW.z).z * 6.283185);
+	float Local245 = math::cos(Local244);
+	float Local246 = math::sin(Local244);
+	float Local247 = (Local246 * -1.0);
+	float Local248 = math::dot(Local243, float2(Local245,Local247));
+	float Local249 = math::dot(Local243, float2(Local246,Local245));
+	float2 Local250 = (float2(0.5,0.5) + float2(Local248,Local249));
+	float4 Local251 = tex::lookup_float4(SpecularTex,float2(Local250.x,1.0-Local250.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local252 = ((math::abs(SpecularFalloffValue1Type - 1.0) > 0.00001) ? (SpecularFalloffValue1Type >= 1.0 ? float3(float2(SpecularFalloffFloat,SpecularFalloffFloat).x,float2(SpecularFalloffFloat,SpecularFalloffFloat).y,SpecularFalloffFloat) : float3(float2(SpecularFloat,SpecularFloat).x,float2(SpecularFloat,SpecularFloat).y,SpecularFloat)) : float3(Local251.x,Local251.y,Local251.z));
+	float Local253 = (Local4.x * float3(SpecularUVW_2.x,SpecularUVW_2.y,SpecularUVW_2.z).x);
+	float Local254 = (Local4.y * float3(SpecularUVW_2.x,SpecularUVW_2.y,SpecularUVW_2.z).y);
+	float Local255 = (1.0 - float3(SpecularUVW_2.x,SpecularUVW_2.y,SpecularUVW_2.z).y);
+	float Local256 = (Local254 + Local255);
+	float Local257 = (float2(Local253,Local256).x + float3(SpecularOffset_2.x,SpecularOffset_2.y,SpecularOffset_2.z).x);
+	float Local258 = (float3(SpecularOffset_2.x,SpecularOffset_2.y,SpecularOffset_2.z).y * -1.0);
+	float Local259 = (float2(Local253,Local256).y + Local258);
+	float2 Local260 = (Local0 + float2(Local257,Local259));
+	float Local261 = (float3(SpecularUVW_2.x,SpecularUVW_2.y,SpecularUVW_2.z).z * 6.283185);
+	float Local262 = math::cos(Local261);
+	float Local263 = math::sin(Local261);
+	float Local264 = (Local263 * -1.0);
+	float Local265 = math::dot(Local260, float2(Local262,Local264));
+	float Local266 = math::dot(Local260, float2(Local263,Local262));
+	float2 Local267 = (float2(0.5,0.5) + float2(Local265,Local266));
+	float4 Local268 = tex::lookup_float4(SpecularTex_2,float2(Local267.x,1.0-Local267.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local269 = ((math::abs(SpecularFalloffValue2Type - 1.0) > 0.00001) ? (SpecularFalloffValue2Type >= 1.0 ? float3(float2(SpecularFalloffFloat_2,SpecularFalloffFloat_2).x,float2(SpecularFalloffFloat_2,SpecularFalloffFloat_2).y,SpecularFalloffFloat_2) : float3(SpecularColor_2.x,SpecularColor_2.y,SpecularColor_2.z)) : float3(Local268.x,Local268.y,Local268.z));
+	float Local270 = math::min(math::max(SpecularFalloffFreshnelIor,0.0),100.0);
+	float Local271 = (1.0 / Local270);
+	float Local272 = math::max(Local270,Local271);
+	float Local273 = (Local272 - 1.0);
+	float Local274 = (Local272 * Local272);
+	float Local275 = (Local274 + Local72);
+	float Local276 = (Local275 - 1.0);
+	float Local277 = math::sqrt(Local276);
+	float Local278 = (Local277 / Local272);
+	float Local279 = ((math::abs(Local278 - 0.99999) > 0.000001) ? (Local278 >= 0.99999 ? 1.0 : 0.0) : 0.0);
+	float Local280 = math::max(Local279,Local78);
+	float Local281 = (Local71 / Local278);
+	float Local282 = (Local272 * Local281);
+	float Local283 = (Local282 - 1.0);
+	float Local284 = (Local282 + 1.0);
+	float Local285 = (Local283 / Local284);
+	float Local286 = math::pow(math::max(Local285,float(0.000001)),2.0);
+	float Local287 = (Local278 / Local71);
+	float Local288 = (Local272 * Local287);
+	float Local289 = (Local288 - 1.0);
+	float Local290 = (Local288 + 1.0);
+	float Local291 = (Local289 / Local290);
+	float Local292 = math::pow(math::max(Local291,float(0.000001)),2.0);
+	float Local293 = (Local286 + Local292);
+	float Local294 = (Local293 * 0.5);
+	float Local295 = (Local272 + 1.0);
+	float Local296 = (Local273 / Local295);
+	float Local297 = math::pow(math::max(Local296,float(0.000001)),2.0);
+	float Local298 = ((math::abs(Local280 - 1.0) > 0.1) ? (Local294) : Local297);
+	float Local299 = ((math::abs(Local273 - 0.0) > 0.000001) ? (Local298) : 0.0);
+	float Local300 = math::saturate(Local299);
+	float3 Local301 = math::lerp(Local252,Local269,Local300);
+	float3 Local302 = ((math::abs(SpecularIsTexType - 1.0) > 0.00001) ? (SpecularIsTexType >= 1.0 ? Local301 : float3(float2(SpecularFloat,SpecularFloat).x,float2(SpecularFloat,SpecularFloat).y,SpecularFloat)) : float3(Local251.x,Local251.y,Local251.z));
+	float Local303 = (Local4.x * float3(RoughnessUVW.x,RoughnessUVW.y,RoughnessUVW.z).x);
+	float Local304 = (Local4.y * float3(RoughnessUVW.x,RoughnessUVW.y,RoughnessUVW.z).y);
+	float Local305 = (1.0 - float3(RoughnessUVW.x,RoughnessUVW.y,RoughnessUVW.z).y);
+	float Local306 = (Local304 + Local305);
+	float Local307 = (float2(Local303,Local306).x + float3(RoughnessOffset.x,RoughnessOffset.y,RoughnessOffset.z).x);
+	float Local308 = (float3(RoughnessOffset.x,RoughnessOffset.y,RoughnessOffset.z).y * -1.0);
+	float Local309 = (float2(Local303,Local306).y + Local308);
+	float2 Local310 = (Local0 + float2(Local307,Local309));
+	float Local311 = (float3(RoughnessUVW.x,RoughnessUVW.y,RoughnessUVW.z).z * 6.283185);
+	float Local312 = math::cos(Local311);
+	float Local313 = math::sin(Local311);
+	float Local314 = (Local313 * -1.0);
+	float Local315 = math::dot(Local310, float2(Local312,Local314));
+	float Local316 = math::dot(Local310, float2(Local313,Local312));
+	float2 Local317 = (float2(0.5,0.5) + float2(Local315,Local316));
+	float4 Local318 = tex::lookup_float4(RoughnessTex,float2(Local317.x,1.0-Local317.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local319 = ((math::abs(RoughnessFalloffValue1Type - 1.0) > 0.00001) ? (RoughnessFalloffValue1Type >= 1.0 ? float3(float2(RoughnessFalloffFloat,RoughnessFalloffFloat).x,float2(RoughnessFalloffFloat,RoughnessFalloffFloat).y,RoughnessFalloffFloat) : float3(float2(RoughnessFloat,RoughnessFloat).x,float2(RoughnessFloat,RoughnessFloat).y,RoughnessFloat)) : float3(Local318.x,Local318.y,Local318.z));
+	float Local320 = (Local4.x * float3(RoughnessUVW_2.x,RoughnessUVW_2.y,RoughnessUVW_2.z).x);
+	float Local321 = (Local4.y * float3(RoughnessUVW_2.x,RoughnessUVW_2.y,RoughnessUVW_2.z).y);
+	float Local322 = (1.0 - float3(RoughnessUVW_2.x,RoughnessUVW_2.y,RoughnessUVW_2.z).y);
+	float Local323 = (Local321 + Local322);
+	float Local324 = (float2(Local320,Local323).x + float3(RoughnessOffset_2.x,RoughnessOffset_2.y,RoughnessOffset_2.z).x);
+	float Local325 = (float3(RoughnessOffset_2.x,RoughnessOffset_2.y,RoughnessOffset_2.z).y * -1.0);
+	float Local326 = (float2(Local320,Local323).y + Local325);
+	float2 Local327 = (Local0 + float2(Local324,Local326));
+	float Local328 = (float3(RoughnessUVW_2.x,RoughnessUVW_2.y,RoughnessUVW_2.z).z * 6.283185);
+	float Local329 = math::cos(Local328);
+	float Local330 = math::sin(Local328);
+	float Local331 = (Local330 * -1.0);
+	float Local332 = math::dot(Local327, float2(Local329,Local331));
+	float Local333 = math::dot(Local327, float2(Local330,Local329));
+	float2 Local334 = (float2(0.5,0.5) + float2(Local332,Local333));
+	float4 Local335 = tex::lookup_float4(RoughnessTex_2,float2(Local334.x,1.0-Local334.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local336 = ((math::abs(RoughnessFalloffValue2Type - 1.0) > 0.00001) ? (RoughnessFalloffValue2Type >= 1.0 ? float3(float2(RoughnessFalloffFloat_2,RoughnessFalloffFloat_2).x,float2(RoughnessFalloffFloat_2,RoughnessFalloffFloat_2).y,RoughnessFalloffFloat_2) : float3(RoughnessColor_2.x,RoughnessColor_2.y,RoughnessColor_2.z)) : float3(Local335.x,Local335.y,Local335.z));
+	float Local337 = math::min(math::max(RoughnessFalloffFreshnelIor,0.0),100.0);
+	float Local338 = (1.0 / Local337);
+	float Local339 = math::max(Local337,Local338);
+	float Local340 = (Local339 - 1.0);
+	float Local341 = (Local339 * Local339);
+	float Local342 = (Local341 + Local72);
+	float Local343 = (Local342 - 1.0);
+	float Local344 = math::sqrt(Local343);
+	float Local345 = (Local344 / Local339);
+	float Local346 = ((math::abs(Local345 - 0.99999) > 0.000001) ? (Local345 >= 0.99999 ? 1.0 : 0.0) : 0.0);
+	float Local347 = math::max(Local346,Local78);
+	float Local348 = (Local71 / Local345);
+	float Local349 = (Local339 * Local348);
+	float Local350 = (Local349 - 1.0);
+	float Local351 = (Local349 + 1.0);
+	float Local352 = (Local350 / Local351);
+	float Local353 = math::pow(math::max(Local352,float(0.000001)),2.0);
+	float Local354 = (Local345 / Local71);
+	float Local355 = (Local339 * Local354);
+	float Local356 = (Local355 - 1.0);
+	float Local357 = (Local355 + 1.0);
+	float Local358 = (Local356 / Local357);
+	float Local359 = math::pow(math::max(Local358,float(0.000001)),2.0);
+	float Local360 = (Local353 + Local359);
+	float Local361 = (Local360 * 0.5);
+	float Local362 = (Local339 + 1.0);
+	float Local363 = (Local340 / Local362);
+	float Local364 = math::pow(math::max(Local363,float(0.000001)),2.0);
+	float Local365 = ((math::abs(Local347 - 1.0) > 0.1) ? (Local361) : Local364);
+	float Local366 = ((math::abs(Local340 - 0.0) > 0.000001) ? (Local365) : 0.0);
+	float Local367 = math::saturate(Local366);
+	float3 Local368 = math::lerp(Local319,Local336,Local367);
+	float3 Local369 = ((math::abs(RoughnessIsTexType - 1.0) > 0.00001) ? (RoughnessIsTexType >= 1.0 ? Local368 : float3(float2(RoughnessFloat,RoughnessFloat).x,float2(RoughnessFloat,RoughnessFloat).y,RoughnessFloat)) : float3(Local318.x,Local318.y,Local318.z));
+	float Local370 = (Local4.x * float3(OpacityUVW.x,OpacityUVW.y,OpacityUVW.z).x);
+	float Local371 = (Local4.y * float3(OpacityUVW.x,OpacityUVW.y,OpacityUVW.z).y);
+	float Local372 = (1.0 - float3(OpacityUVW.x,OpacityUVW.y,OpacityUVW.z).y);
+	float Local373 = (Local371 + Local372);
+	float Local374 = (float2(Local370,Local373).x + float3(OpacityOffset.x,OpacityOffset.y,OpacityOffset.z).x);
+	float Local375 = (float3(OpacityOffset.x,OpacityOffset.y,OpacityOffset.z).y * -1.0);
+	float Local376 = (float2(Local370,Local373).y + Local375);
+	float2 Local377 = (Local0 + float2(Local374,Local376));
+	float Local378 = (float3(OpacityUVW.x,OpacityUVW.y,OpacityUVW.z).z * 6.283185);
+	float Local379 = math::cos(Local378);
+	float Local380 = math::sin(Local378);
+	float Local381 = (Local380 * -1.0);
+	float Local382 = math::dot(Local377, float2(Local379,Local381));
+	float Local383 = math::dot(Local377, float2(Local380,Local379));
+	float2 Local384 = (float2(0.5,0.5) + float2(Local382,Local383));
+	float4 Local385 = tex::lookup_float4(OpacityTex,float2(Local384.x,1.0-Local384.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local386 = ((math::abs(OpacityFalloffValue1Type - 1.0) > 0.00001) ? (OpacityFalloffValue1Type >= 1.0 ? float3(float2(OpacityFalloffFloat,OpacityFalloffFloat).x,float2(OpacityFalloffFloat,OpacityFalloffFloat).y,OpacityFalloffFloat) : float3(float2(OpacityFloat,OpacityFloat).x,float2(OpacityFloat,OpacityFloat).y,OpacityFloat)) : float3(Local385.x,Local385.y,Local385.z));
+	float Local387 = (Local4.x * float3(OpacityUVW_2.x,OpacityUVW_2.y,OpacityUVW_2.z).x);
+	float Local388 = (Local4.y * float3(OpacityUVW_2.x,OpacityUVW_2.y,OpacityUVW_2.z).y);
+	float Local389 = (1.0 - float3(OpacityUVW_2.x,OpacityUVW_2.y,OpacityUVW_2.z).y);
+	float Local390 = (Local388 + Local389);
+	float Local391 = (float2(Local387,Local390).x + float3(OpacityOffset_2.x,OpacityOffset_2.y,OpacityOffset_2.z).x);
+	float Local392 = (float3(OpacityOffset_2.x,OpacityOffset_2.y,OpacityOffset_2.z).y * -1.0);
+	float Local393 = (float2(Local387,Local390).y + Local392);
+	float2 Local394 = (Local0 + float2(Local391,Local393));
+	float Local395 = (float3(OpacityUVW_2.x,OpacityUVW_2.y,OpacityUVW_2.z).z * 6.283185);
+	float Local396 = math::cos(Local395);
+	float Local397 = math::sin(Local395);
+	float Local398 = (Local397 * -1.0);
+	float Local399 = math::dot(Local394, float2(Local396,Local398));
+	float Local400 = math::dot(Local394, float2(Local397,Local396));
+	float2 Local401 = (float2(0.5,0.5) + float2(Local399,Local400));
+	float4 Local402 = tex::lookup_float4(OpacityTex_2,float2(Local401.x,1.0-Local401.y),tex::wrap_repeat,tex::wrap_repeat);
+	float3 Local403 = ((math::abs(OpacityFalloffValue2Type - 1.0) > 0.00001) ? (OpacityFalloffValue2Type >= 1.0 ? float3(float2(OpacityFalloffFloat_2,OpacityFalloffFloat_2).x,float2(OpacityFalloffFloat_2,OpacityFalloffFloat_2).y,OpacityFalloffFloat_2) : float3(OpacityColor_2.x,OpacityColor_2.y,OpacityColor_2.z)) : float3(Local402.x,Local402.y,Local402.z));
+	float Local404 = math::min(math::max(OpacityFalloffFreshnelIor,0.0),100.0);
+	float Local405 = (1.0 / Local404);
+	float Local406 = math::max(Local404,Local405);
+	float Local407 = (Local406 - 1.0);
+	float Local408 = (Local406 * Local406);
+	float Local409 = (Local408 + Local72);
+	float Local410 = (Local409 - 1.0);
+	float Local411 = math::sqrt(Local410);
+	float Local412 = (Local411 / Local406);
+	float Local413 = ((math::abs(Local412 - 0.99999) > 0.000001) ? (Local412 >= 0.99999 ? 1.0 : 0.0) : 0.0);
+	float Local414 = math::max(Local413,Local78);
+	float Local415 = (Local71 / Local412);
+	float Local416 = (Local406 * Local415);
+	float Local417 = (Local416 - 1.0);
+	float Local418 = (Local416 + 1.0);
+	float Local419 = (Local417 / Local418);
+	float Local420 = math::pow(math::max(Local419,float(0.000001)),2.0);
+	float Local421 = (Local412 / Local71);
+	float Local422 = (Local406 * Local421);
+	float Local423 = (Local422 - 1.0);
+	float Local424 = (Local422 + 1.0);
+	float Local425 = (Local423 / Local424);
+	float Local426 = math::pow(math::max(Local425,float(0.000001)),2.0);
+	float Local427 = (Local420 + Local426);
+	float Local428 = (Local427 * 0.5);
+	float Local429 = (Local406 + 1.0);
+	float Local430 = (Local407 / Local429);
+	float Local431 = math::pow(math::max(Local430,float(0.000001)),2.0);
+	float Local432 = ((math::abs(Local414 - 1.0) > 0.1) ? (Local428) : Local431);
+	float Local433 = ((math::abs(Local407 - 0.0) > 0.000001) ? (Local432) : 0.0);
+	float Local434 = math::saturate(Local433);
+	float3 Local435 = math::lerp(Local386,Local403,Local434);
+	float3 Local436 = ((math::abs(OpacityIsTexType - 1.0) > 0.00001) ? (OpacityIsTexType >= 1.0 ? Local435 : float3(float2(OpacityFloat,OpacityFloat).x,float2(OpacityFloat,OpacityFloat).y,OpacityFloat)) : float3(Local385.x,Local385.y,Local385.z));
+
+	float3 EmissiveColor_mdl = Local101;
+	float Opacity_mdl = Local436.x;
+	float OpacityMask_mdl = (math::saturate(Local436.x) - 1.0f / 255.0f) < 0.0f ? 0.0f : 1.0f;
+	float3 BaseColor_mdl = Local168;
+	float Metallic_mdl = Local235.x;
+	float Specular_mdl = Local302.x;
+	float Roughness_mdl = Local369.x;
+	float3 Refraction_mdl = 1.491;
+	float SurfaceThickness_mdl = 0.01;
+
+	} in
+		::OmniUe4Translucent(
+			base_color: BaseColor_mdl,
+			metallic: Metallic_mdl,
+			roughness: Roughness_mdl,
+			specular: Specular_mdl,
+			normal: Normal_mdl,
+			opacity: Opacity_mdl,
+			opacity_mask: OpacityMask_mdl,
+			emissive_color: EmissiveColor_mdl,
+			displacement: WorldPositionOffset_mdl,
+			refraction: Refraction_mdl.x,
+			two_sided: false);
