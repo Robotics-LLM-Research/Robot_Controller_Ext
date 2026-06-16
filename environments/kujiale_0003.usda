@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (-1.7644994962237222, 2.3147606735407282, 2.608447330729561)
-                double3 target = (-0.9648405172695985, -3.2979846573057725, -0.1507686851909531)
+                double3 position = (-0.9433283349497347, -1.0134887308434266, 0.8816430431092722)
+                double3 target = (-1.1494964461266428, -7.0004780506897, -1.0853575283329033)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -117,10 +117,22 @@ def Xform "Root"
                 float focusDistance = 400
                 float fStop = 0
                 float horizontalAperture = 20.955
+                bool omni:kit:cameraLock = 0
                 custom uniform vector3d omni:kit:centerOfInterest = (0, 0, -400)
                 quatd xformOp:orient = (0.6031750542769255, 0.37759865591147523, -0.3687798126870618, -0.5979971226572673)
                 double3 xformOp:scale = (1, 1, 1)
                 double3 xformOp:translate = (-2.4010330150696944, 0, 1.5)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Camera "FrontCam"
+            {
+                float2 clippingRange = (0.01, 10000000)
+                float focalLength = 13
+                float focusDistance = 400
+                quatd xformOp:orient = (0.5000000000000003, 0.4999999999999999, -0.4999999999999999, -0.4999999999999999)
+                double3 xformOp:scale = (0.2, 0.2, 0.2)
+                double3 xformOp:translate = (0.39, 0, 0)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
             }
         }
