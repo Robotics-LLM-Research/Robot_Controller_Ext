@@ -3,10 +3,11 @@
 ## [Unreleased]
 
 ### Changed
-- Camera sensing now uses `isaacsim.sensors.camera` instead of direct Replicator annotators.
+- Camera init deferred to physics update instead of running on Play attach.
 
 ### Fixed
 - Play crash and teleop failures caused by camera init running too early during Play attach.
+- Extension enable errors from declaring `omni.replicator.core` as an explicit dependency.
 
 ## [1.0.3] - 2026-06-16
 ### Added

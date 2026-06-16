@@ -14,8 +14,6 @@ writeTarget.kit = true
 
 [dependencies]
 "isaacsim.core.api" = {}
-"isaacsim.sensors.camera" = {}
-"omni.replicator.core" = {}
 
 [[python.module]]
 name = "robot_controller"
