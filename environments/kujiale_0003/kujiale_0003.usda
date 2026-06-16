@@ -2908,7 +2908,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0000"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "physics_constraint_0001"
                         {
                             token visibility = "invisible"
@@ -2944,7 +2953,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0001"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "physics_constraint_0001"
                         {
                             token visibility = "invisible"
@@ -2980,6 +2998,9 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0002"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
                         over "physics_constraint_0001"
                         {
@@ -2991,7 +3012,9 @@ def Xform "Root"
                             token visibility = "invisible"
                         }
 
-                        over "group_0000"
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
                         {
                             token visibility = "inherited"
                         }
@@ -3021,7 +3044,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0003"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "physics_constraint_0001"
                         {
                             token visibility = "invisible"
@@ -3057,7 +3089,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0004"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "physics_constraint_0001"
                         {
                             token visibility = "invisible"
@@ -3093,7 +3134,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0005"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "physics_constraint_0001"
                         {
                             token visibility = "invisible"
@@ -3149,7 +3199,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0006"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "physics_constraint_0001"
                         {
                             token visibility = "invisible"
@@ -3185,7 +3244,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0007"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "group_0001"
                         {
                             token visibility = "invisible"
@@ -3240,7 +3308,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0008"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "physics_constraint_0001"
                         {
                             token visibility = "invisible"
@@ -3290,7 +3367,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0009"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "group_0001"
                         {
                             token visibility = "invisible"
@@ -3324,7 +3410,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0010"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "physics_constraint_0001"
                         {
                             token visibility = "invisible"
@@ -3350,7 +3445,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0011"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "physics_constraint_0001"
                         {
                             token visibility = "invisible"
@@ -3386,7 +3490,16 @@ def Xform "Root"
                 over "Meshes"
                 {
                     over "door_0012"
+                    (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
                     {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+
                         over "physics_constraint_0001"
                         {
                             token visibility = "invisible"
@@ -3438,6 +3551,20 @@ def Xform "Root"
                 float3 xformOp:scale = (1, 1, 1)
                 double3 xformOp:translate = (-6.05067627, -5.37848128, 1.199999990370606)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+                over "Meshes"
+                {
+                    over "window_0000" (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
+                    {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+                    }
+                }
             }
 
             def Xform "window_0001" (
@@ -3448,6 +3575,20 @@ def Xform "Root"
                 float3 xformOp:scale = (1, 1, 1)
                 double3 xformOp:translate = (-6.5006762700000005, 5.58151933, 1.500000000000001)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+                over "Meshes"
+                {
+                    over "window_0001" (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
+                    {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+                    }
+                }
             }
 
             def Xform "window_0002" (
@@ -3458,6 +3599,20 @@ def Xform "Root"
                 float3 xformOp:scale = (1, 1, 1)
                 double3 xformOp:translate = (6.38432373, -4.84098097, 1.300000000000001)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+                over "Meshes"
+                {
+                    over "window_0002" (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
+                    {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+                    }
+                }
             }
 
             def Xform "window_0003" (
@@ -3468,6 +3623,20 @@ def Xform "Root"
                 float3 xformOp:scale = (1, 1, 1)
                 double3 xformOp:translate = (2.49432373, -4.84098097, 1.300000000000001)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+                over "Meshes"
+                {
+                    over "window_0003" (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                    )
+                    {
+                        over "group_0000" (
+                            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+                        )
+                        {
+                        }
+                    }
+                }
             }
 
             def Xform "window_0004" (
