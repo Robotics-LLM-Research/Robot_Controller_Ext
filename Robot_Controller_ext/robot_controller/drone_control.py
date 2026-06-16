@@ -460,9 +460,6 @@ class DroneRuntime:
     def get_frame(self):
         return self.sensing.get_rgb_frame_jpeg_with_meta()
 
-    def get_camera_debug(self):
-        return self.sensing.get_camera_debug()
-
     # ---------- Wiring ----------
     def attach_drone(self):
         """ Connects sensors to prism """

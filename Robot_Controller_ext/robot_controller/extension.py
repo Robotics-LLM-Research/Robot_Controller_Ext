@@ -155,7 +155,6 @@ class Extension(omni.ext.IExt):
                 get_pose=runtime.get_pose,
                 get_sensors=runtime.get_sensors,
                 get_frame=runtime.get_frame,
-                get_camera_debug=runtime.get_camera_debug,
             )
         elif kind == "drone":
             runtime = DroneRuntime(
@@ -172,7 +171,6 @@ class Extension(omni.ext.IExt):
                 get_status=runtime.get_status,
                 get_sensors=runtime.get_sensors,
                 get_frame=runtime.get_frame,
-                get_camera_debug=runtime.get_camera_debug,
             )
         else:
             raise ValueError(f"unknown robot kind: {kind}")
@@ -448,19 +446,6 @@ class Extension(omni.ext.IExt):
                     log(f"{robot['name']} attached", 2)
             except Exception as e:
                 log(f"{robot['name']} play init failed: {e}", 3)
-
-        # Let RTX/Hydra produce render buffers before camera backends attach.
-        for _ in range(60):
-            await omni.kit.app.get_app().next_update_async()
-
-        for robot in self.robots:
-            try:
-                if robot["runtime"].sensing.init_camera():
-                    log(f"{robot['name']} camera ready ({robot['runtime'].sensing.get_camera_debug().get('backend')})", 2)
-                else:
-                    log(f"{robot['name']} camera init failed; GET /debug/camera for steps", 3)
-            except Exception as e:
-                log(f"{robot['name']} camera init failed: {e}", 3)
 
         self._restore_base_poses()
 
