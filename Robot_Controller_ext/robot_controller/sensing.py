@@ -41,9 +41,6 @@ class SensorSuite:
         self._rgb_annot = None
         self._depth_annot = None
         self._camera_ready = False
-        self._camera_init_pending = False
-        self._camera_init_attempts = 0
-        self._camera_init_max_attempts = 120
         self._depth_read_err_logged = False
 
         # IMU
@@ -79,7 +76,14 @@ class SensorSuite:
                 )
                 self._cam_path = None
             else:
-                self._camera_init_pending = True
+                try:
+                    self._init_camera_depth(self._cam_path)
+                    self._camera_ready = True
+                except Exception as e:
+                    log(f"[SENSE] Camera init failed: {e}", 3)
+                    self._rp = None
+                    self._rgb_annot = None
+                    self._depth_annot = None
 
         if self._imu_path is not None:
             sensors_prim = stage.GetPrimAtPath(self._imu_path)
@@ -174,7 +178,6 @@ class SensorSuite:
         Call every physics step
         - Camera/IMU summaries update at SENSOR_HZ
         """
-        self._try_init_camera()
         self._update_camera_imu_throttled()
 
     def _update_camera_imu_throttled(self):
@@ -223,28 +226,6 @@ class SensorSuite:
                     self._sensor_state["imu_orientation"] = r.orientation  # quaternion
             except Exception as e:
                 log(f"[SENSE] imu read failed: {e}", 3)
-
-    # ----- Camera / IMU init -----
-    def _try_init_camera(self):
-        if not self._camera_init_pending or self._camera_ready:
-            return
-
-        self._camera_init_attempts += 1
-        if self._camera_init_attempts > self._camera_init_max_attempts:
-            self._camera_init_pending = False
-            log(f"[SENSE] Camera init failed after {self._camera_init_max_attempts} attempts", 3)
-            return
-
-        try:
-            self._init_camera_depth(self._cam_path)
-            self._camera_init_pending = False
-            self._camera_ready = True
-        except Exception as e:
-            self._rp = None
-            self._rgb_annot = None
-            self._depth_annot = None
-            if self._camera_init_attempts == 1 or self._camera_init_attempts % 30 == 0:
-                log(f"[SENSE] Camera init attempt {self._camera_init_attempts} failed: {e}", 3)
 
     def _init_camera_depth(self, cam_path: str):
         self._rp = rep.create.render_product(Sdf.Path(cam_path), self._cam_res)
