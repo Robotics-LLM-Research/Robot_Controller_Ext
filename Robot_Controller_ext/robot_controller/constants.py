@@ -19,7 +19,9 @@ DRONE_BASE_ROTATION_DEG = Gf.Vec3f(0.0, 0.0, 90.0)
 # Robot add-ons (under each robot root)
 BODY_PRIM = "body"
 FRONT_CAM_PRIM = "FrontCam"
+CAM_PRIM_ALIASES = ("Spot_Cam", "Perspective_Cam", "Drone_Cam", "SpotCam")
 SENSORS_PRIM = "Sensors"
+SENSORS_PRIM_ALIASES = ("Imu_Sensor", "IMU")
 
 # Task / environment
 ENVIRONMENT_PRIM = "Environment"

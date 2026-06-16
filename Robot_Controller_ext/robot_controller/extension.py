@@ -28,7 +28,7 @@ from .constants import (
 from .drone_control import DroneRuntime
 from .spot_control import SpotRuntime
 from .task_control import TaskRuntime
-from .utils import log, get_stage_root, discover_robots
+from .utils import log, get_stage_root, discover_robots, resolve_camera_path, resolve_sensors_path
 
 
 
@@ -137,8 +137,8 @@ class Extension(omni.ext.IExt):
         path = spec["path"]
         cmd_q = queue.Queue()
         body_path = f"{path}/{BODY_PRIM}"
-        cam_path = f"{body_path}/{FRONT_CAM_PRIM}"
-        sensors_path = f"{body_path}/{SENSORS_PRIM}"
+        cam_path = resolve_camera_path(self.stage, body_path)
+        sensors_path = resolve_sensors_path(self.stage, body_path)
 
         if kind == "spot":
             runtime = SpotRuntime(

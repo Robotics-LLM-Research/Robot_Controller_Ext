@@ -5,7 +5,14 @@ import numpy as np
 import omni.usd
 from pxr import UsdGeom, UsdPhysics
 
-from .constants import CANDIDATE_STAGE_ROOTS, ROBOT_NAME_RE
+from .constants import (
+    CAM_PRIM_ALIASES,
+    CANDIDATE_STAGE_ROOTS,
+    FRONT_CAM_PRIM,
+    ROBOT_NAME_RE,
+    SENSORS_PRIM,
+    SENSORS_PRIM_ALIASES,
+)
 
 
 
@@ -91,6 +98,52 @@ def discover_robots(stage, stage_root):
         })
 
     return found
+
+
+def _find_body_child(stage, body_path: str, names: tuple[str, ...], type_check=None):
+    body = stage.GetPrimAtPath(body_path)
+    if not body or not body.IsValid():
+        return None
+
+    wanted = set(names)
+    for child in body.GetChildren():
+        if not child.IsValid() or child.GetName() not in wanted:
+            continue
+        if type_check is not None and not type_check(child):
+            continue
+        return str(child.GetPath())
+    return None
+
+
+def resolve_camera_path(stage, body_path: str) -> str | None:
+    """Return a UsdGeom.Camera under body, preferring FrontCam then legacy names."""
+    if stage is None or not body_path:
+        return None
+
+    path = _find_body_child(
+        stage,
+        body_path,
+        (FRONT_CAM_PRIM,) + CAM_PRIM_ALIASES,
+        UsdGeom.Camera,
+    )
+    if path is not None:
+        if not path.endswith(f"/{FRONT_CAM_PRIM}"):
+            log(f"[SENSE] using camera prim {path} (rename to {FRONT_CAM_PRIM} under body)", 2)
+        return path
+    return None
+
+
+def resolve_sensors_path(stage, body_path: str) -> str | None:
+    """Return an IMU/sensors prim under body, preferring Sensors then legacy names."""
+    if stage is None or not body_path:
+        return None
+
+    path = _find_body_child(stage, body_path, (SENSORS_PRIM,) + SENSORS_PRIM_ALIASES)
+    if path is not None:
+        if not path.endswith(f"/{SENSORS_PRIM}"):
+            log(f"[SENSE] using IMU prim {path} (rename to {SENSORS_PRIM} under body)", 2)
+        return path
+    return None
 
 
 # ----- Math -----

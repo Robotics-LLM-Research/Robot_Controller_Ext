@@ -88,6 +88,9 @@ class DroneLookController:
     
     def attach(self) -> bool:
         """ Find camera prim and bind to the existing Rotate:look op """
+        if not self._cam_path:
+            return False
+
         stage = omni.usd.get_context().get_stage()
         prim = stage.GetPrimAtPath(self._cam_path)
 
@@ -426,7 +429,7 @@ class DroneRuntime:
         cmd_q: "queue.Queue",
         drone_path: str,
         drone_body_path: str,
-        cam_path: str,
+        cam_path: str | None,
         imu_path: str | None,
     ):
         self.cmd_q = cmd_q

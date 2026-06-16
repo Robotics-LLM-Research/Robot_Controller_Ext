@@ -194,8 +194,8 @@ class SpotRuntime:
         self,
         cmd_q: "queue.Queue",
         spot_body_path: str,
-        cam_path: str,
-        imu_path: str,
+        cam_path: str | None,
+        imu_path: str | None,
     ):
         self.cmd_q = cmd_q
         self.spot = None
