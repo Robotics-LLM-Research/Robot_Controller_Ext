@@ -1,13 +1,28 @@
 # Robot Controller Extension
 
-An Isaac Sim extension for controlling simulated robots via HTTP REST API. The extension spawns the robots, exposes local HTTP APIs for control and sensing, and provides a task API for querying and resetting the scenario target.
+Robot Controller Extension is a lightweight Isaac Sim extension that exposes simulated robots through local HTTP REST APIs.
+
+It discovers supported robot prims in the active Isaac Sim stage, attaches runtime controllers when the simulation starts, and serves per-robot APIs for motion control, pose/status queries, camera/IMU access, and task-level reset/target operations.
+
+The extension is intended as a simple execution layer for external agents, scripts, notebooks, and LLM-based robotics experiments that need to control Isaac Sim without depending on ROS, MCP, or a custom simulator loop.
 
 ## Features
 
-- **Ground robot**: Velocity control, move/rotate commands, pose and status, camera and IMU sensors
-- **Drone**: Full 3D velocity control, move/rotate/altitude, camera
-- **REST API**: FastAPI-based endpoints for programmatic control
-- **Interactive docs**: Swagger UI at `/docs` for each API
+- **Ground robot control**: Velocity, move/rotate, pose/status, camera/IMU when available
+- **Drone control**: 3D velocity, movement/altitude/rotation/look commands, camera/sensors when available
+- **REST API**: FastAPI-based local endpoints
+- **Per-robot APIs**: One API service per discovered robot
+- **Task API**: Target query and scenario reset
+- **Interactive docs**: Swagger UI at `/docs`
+
+## Intended use cases
+
+- LLM or agentic robot-control experiments
+- Scripted Isaac Sim task execution
+- Benchmark environments that need reset/target APIs
+- Lightweight robot-control clients outside Isaac Sim
+- Quick control/sensing tests without setting up ROS
+- Multi-robot experiments with one local API per robot
 
 ## Requirements
 
@@ -26,8 +41,8 @@ cd ~/path/to/isaacsim
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Diego5936/Spot_Extension.git
-cd Spot_Extension
+git clone https://github.com/Robotics-LLM-Research/Robot_Controller_Ext.git
+cd Robot_Controller_Ext
 ```
 
 > **Tip:** Python files in this repo start with `# pyright: reportMissingImports=false` because Isaac Sim provides `omni`, `pxr`, and related packages at runtime. There is no virtual environment in the repo, so editors may otherwise show unresolved-import warnings outside Isaac Sim.
@@ -65,22 +80,28 @@ Press **Play** in Isaac Sim to attach to discovered robots and start the HTTP AP
 
 For endpoint parameters and Swagger links, see [`docs/README.md`](docs/README.md).
 
+## Supported robot prims
+
+The extension discovers robot prims directly under the stage root when Play starts. Only these name patterns are recognized (case-sensitive):
+
+| Name pattern | Robot type | API |
+|--------------|------------|-----|
+| `Spot`, `Spot-1`, `Spot-2`, … | Ground robot (quadruped) | Ground robot API |
+| `Drone`, `Drone-1`, `Drone-2`, … | Aerial drone | Drone API |
+
+Each discovered robot must have a `body` prim under its root. Optional sensor prims under `body` are `FrontCam` (camera) and `Sensors` (IMU).
+
+Bundled example worlds in `environments/` follow these conventions. Custom stages can use compatible USD assets as long as prim names and layout match.
+
+API ports follow sibling order under the stage root: first robot → `8002`, second → `8003`, and so on.
+
 ## Environment setup
 
 Custom worlds should follow these conventions so discovery and control work without code changes.
 
 **Stage root** — Required. Resolved automatically, in order: stage `defaultPrim`, parent of the first `PhysicsScene`, then `/World` or `/Root`. If resolution fails, the extension logs an error and does not start. Set `defaultPrim` on custom stages when possible (e.g. `defaultPrim = "World"`).
 
-**Robot placement** — Robot prims must be **direct children** of the stage root, not nested deeper.
-
-**Robot names** — Prim names must match exactly (case-sensitive):
-
-| Name pattern | Type |
-|--------------|------|
-| `Spot`, `Spot-1`, `Spot-2`, … | Ground robot |
-| `Drone`, `Drone-1`, `Drone-2`, … | Drone |
-
-API ports follow **sibling order** under the stage root (see [APIs](#apis)).
+**Robot placement** — Robot prims must be **direct children** of the stage root, not nested deeper. See [Supported robot prims](#supported-robot-prims) for recognized names and port order.
 
 **Prim layout** (under each robot root):
 
@@ -101,59 +122,23 @@ If either prim is missing or invalid, the extension logs a warning in the Isaac 
 **Workflow** — Open the world in Isaac Sim **before** enabling the extension so robots are present at startup. Press **Play** to attach controllers and start robot APIs.
 
 Bundled examples: `environments/spot_drone_world.usd`, `environments/spot_target_world.usd`.
-## APIs
 
-All services bind to host **`127.0.0.1`** and run as background servers inside Isaac Sim. Commands are processed each physics step.
+## API overview
 
-**Port assignment**
+All services bind to `127.0.0.1`.
 
-- **Task API** always uses the base port **`8001`**.
-- Each robot discovered in the stage (in discovery order) gets the next port: **`8002`**, **`8003`**, and so on.
-- Discovery matches prims directly under the stage root named `Spot`, `Drone`, `Spot-1`, `Spot-2`, `Drone-1`, etc.
+- Task API: `8001`
+- First discovered robot: `8002`
+- Second discovered robot: `8003`
+- Additional robots continue incrementing ports
 
-Interactive docs (Swagger UI) for each service: `http://127.0.0.1:<port>/docs`
+Interactive Swagger docs: `http://127.0.0.1:<port>/docs`
 
-| Robot kind | Endpoints include |
-|------------|-------------------|
-| Ground (`Spot`, `Spot-N`) | `/status`, `/pose`, `/cmd_vel`, `/move`, `/rotate`, `/sensors`, `/frame`, … |
-| Drone (`Drone`, `Drone-N`) | `/status`, `/cmd_vel`, `/move_fwd`, `/move_lat`, `/raise_alt`, `/look`, `/sensors`, `/frame`, … |
-| Task | `/target`, `/reset` |
-
-## Main endpoints
-
-### Ground robot API
-
-- `GET /ping`
-- `GET /status`
-- `GET /pose`
-- `POST /cmd_vel`
-- `POST /stop`
-- `POST /move`
-- `POST /rotate`
-- `GET /sensors`
-- `GET /frame`
-
-### Drone API
-
-- `GET /ping`
-- `GET /status`
-- `POST /cmd_vel`
-- `POST /stop`
-- `POST /move_fwd`
-- `POST /move_lat`
-- `POST /raise_alt`
-- `POST /rotate`
-- `POST /look`
-- `GET /sensors`
-- `GET /frame`
-
-### Task API
-
-- `GET /ping`
-- `GET /target`
-- `POST /reset`
+For detailed endpoint usage, see [`docs/README.md`](docs/README.md).
 
 ## Developer notes
+
+The extension is organized as a thin Isaac Sim runtime layer plus separate API/server, robot runtime, task, and sensing modules so the external HTTP interface stays separate from Isaac Sim-specific control logic.
 
 The `robot_controller` Python module is loaded by Isaac Sim when the extension is enabled. It creates the runtimes on startup, attaches them on first play, and advances them each physics step.
 
@@ -170,13 +155,13 @@ The `robot_controller` Python module is loaded by Isaac Sim when the extension i
 ## Project structure
 
 ```
-Spot_Extension/
+Robot_Controller_Ext/
 ├── Robot_Controller_ext/   # Isaac Sim extension (add this path in Extension Search Paths)
-│   ├── config/               # extension.toml
-│   └── robot_controller/     # Extension Python module
-├── environments/             # World and simulation assets
-├── agent/                    # External agent clients (HTTP)
-├── tests/                    # Client-side test scripts
-├── docs/                     # API usage reference
-└── README.md                 # This file
+│   ├── config/             # extension.toml
+│   └── robot_controller/   # Extension Python module
+├── environments/           # World and simulation assets
+├── agent/                  # External agent clients (HTTP)
+├── tests/                  # Client-side test scripts
+├── docs/                   # API usage reference
+└── README.md               # Repo overview and setup
 ```
