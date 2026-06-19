@@ -1,10 +1,16 @@
 # Robot Controller Extension
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Robot Controller Extension is a lightweight Isaac Sim extension that exposes simulated robots through local HTTP REST APIs.
 
 It discovers supported robot prims in the active Isaac Sim stage, attaches runtime controllers when the simulation starts, and serves per-robot APIs for motion control, pose/status queries, camera/IMU access, and task-level reset/target operations.
 
 The extension is intended as a simple execution layer for external agents, scripts, notebooks, and LLM-based robotics experiments that need to control Isaac Sim without depending on ROS, MCP, or a custom simulator loop.
+
+|||
+|---|---|
+|![](docs/assets/spot-targets.gif)|![](docs/assets/spot-house.gif)|
 
 ## Features
 
